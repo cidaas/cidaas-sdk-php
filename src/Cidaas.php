@@ -9,6 +9,7 @@ use GuzzleHttp\RequestOptions;
 use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use UnexpectedValueException;
+use GuzzleHttp\Exception\RequestException;
 
 /**
  * Cidaas connector.
@@ -111,6 +112,9 @@ class Cidaas {
             $body = $response->getBody();
             $parsedBody = $this->parseJson($body);
             return $parsedBody['data']['requestId'];
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -136,6 +140,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -167,6 +174,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -200,6 +210,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -266,6 +279,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -315,6 +331,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -341,6 +360,9 @@ class Cidaas {
             $body = $response->getBody();
 
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -373,6 +395,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (Exception $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -402,6 +427,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -435,6 +463,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -464,6 +495,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -497,6 +531,9 @@ class Cidaas {
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         });
     }
 
@@ -553,6 +590,9 @@ class Cidaas {
         return $client->getAsync($openid_configuration_url)->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             return $this->parseJson($body);
+        },
+        function (RequestException $e) {
+            throw new \Exception($e->getMessage());
         })->wait();
     }
 }
