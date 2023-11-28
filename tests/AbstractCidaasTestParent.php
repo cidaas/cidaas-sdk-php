@@ -32,6 +32,42 @@ abstract class AbstractCidaasTestParent extends TestCase {
         return '{"token_type":"Bearer","sub":"' . self::$SUB . '","expires_in":86400,"id_token_expires_in":86400,"access_token":"' . self::$ACCESS_TOKEN . '","id_token":"eyJhbGciOiJSUzI1NiIsImtpZCI6IjA2MTVmNzk5LWYzZmMtNDM0ZS04NDEyLWUxYWJjMzdhZWZlOSJ9.eyJhbXIiOlsiMiJdLCJ1YV9oYXNoIjoiZDViNWI4NDJiOGUxOTM4YzIzNDJmMGY5ZTdjMzI0ZWEiLCJzaWQiOiJiNWJkY2ZkMS00MzU3LTRiNTQtOGIxMS1iZDZiYzhhNmY3ZGEiLCJzdWIiOiJkZjgzOGNmNy1kYzk1LTQ0ZGUtYTFjYy01YzBlYWZiMGY2ZGIiLCJpc3ViIjoiM2Y5NTU1ZjktYWMwMy00ZDMzLTljZGItNDMyZTFiY2UxNDBmIiwiYXVkIjoiN2Q1YWJkYmMtODE4Ni00YzgyLTk5NDMtZjcxNTA2YWFmNzAwIiwiaWF0IjoxNjAzMzU3MDA2LCJhdXRoX3RpbWUiOjE2MDMzNTcwMDUsImlzcyI6Imh0dHBzOi8vbmlnaHRseWJ1aWxkLmNpZGFhcy5kZSIsImp0aSI6ImY1ZTNlOTc4LWM2OTUtNGE2MC1iMWEwLTU0MmIyYWRiYjhmMSIsIm5vbmNlIjoiMTYwMzM1NzAwMSIsInNjb3BlcyI6WyJvcGVuaWQiLCJvZmZsaW5lX2FjY2VzcyJdLCJyb2xlcyI6WyJVU0VSIl0sImdyb3VwcyI6W3siZ3JvdXBJZCI6IkNJREFBU19BRE1JTlMiLCJyb2xlcyI6WyJTRUNPTkRBUllfQURNSU4iXX1dLCJleHAiOjE2MDM0NDM0MDYsImF0X2hhc2giOiIwOHdwZlVfYXFmSVF3ME9XUHhkSlFBIiwiY19oYXNoIjoiSUJvUTJDTW1hMHh6MkJ0RTRnWXR3dyIsImVtYWlsIjoiam9lcmcua25vYmxvY2hAd2lkYXMuZGUifQ.QfAMz80vkzQt3DdJqOJNPY14D1tGspjQrT5XjECyjKJrrO52QC6KAkxx1dLkQE5ZfGIkDGG0dxstsB6JH3eS02KRxTAVlr6K5yoRNVsUgFGKYdn9cbqaFhY9mrkbvcTP_Kbwi4dA4eq_j8NvyB4AeF5lT6TyyuEJyhZchFfo1B4","refresh_token":"' . self::$REFRESH_TOKEN . '","identity_id":"3f9555f9-ac03-4d33-9cdb-432e1bce140f"}';
     }
 
+    protected static function getMfaListSuccessfulResponse() {
+        return '{
+            "success": true,
+            "status": 200,
+            "data": {
+                "configured_list": [
+                    {
+                        "type": "BACKUPCODE"
+                    },
+                    {
+                        "type": "EMAIL",
+                        "mediums": [
+                            {
+                                "id": "99a5effd-584a-41ac-a0f8-849f9fc734b8",
+                                "key_name": "t*****t@w***s.in"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "PASSWORD"
+                    },
+                    {
+                        "type": "SMS",
+                        "mediums": [
+                            {
+                                "id": "99a5effd-584a-41ac-a0f8-849f9fc734b8",
+                                "key_name": "+91******237"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }';
+    }
+
+
     protected $provider;
     protected $mock;
     public static $headers = [];
