@@ -6,15 +6,67 @@ use Cidaas\OAuth2\Client\Provider\AbstractCidaasTestParent;
 use GuzzleHttp\Psr7\Response;
 use function PHPUnit\Framework\assertEquals;
 use function PHPUnit\Framework\assertTrue;
+use function PHPUnit\Framework\assertFalse;
 
 final class GetMFAListTest extends AbstractCidaasTestParent {
-    private static $loginUnsuccessfulWithUnkownUserResponse = '{"success":false,"status":417,"error":{"error":"invalid_username_password","username":"user@widas.de","username_type":"email","error_description":"Given username or password is invalid","view_type":"login","requestId":"bb3b6908-64e4-4ccf-891e-908fc9dd1236","suggested_url":"https://nightlybuild.cidaas.de/user-ui/login?groupname=default&lang=&view_type=login&error=invalid_username_password&username=user%40widas.de&username_type=email&error_description=Given%20username%20or%20password%20is%20invalid&requestId=bb3b6908-64e4-4ccf-891e-908fc9dd1236"}}';
-
-    private static function loginUnsuccessfulWithKnownUserResponse() {
-        return '{"success":false,"status":417,"error":{"error":"invalid_username_password","username":"user@widas.de","username_type":"email","view_type":"login","sub":"' . self::$SUB . '","q":"dddb62b2-7e2a-4143-a492-d5818802cdac","requestId":"cfc1d841-4dab-4ffa-ab6f-fc2662a9b206","suggested_url":"https://nightlybuild.cidaas.de/user-ui/login?groupname=default&lang=&view_type=login&error=invalid_username_password&username=user%40widas.de&username_type=email&sub=dddb62b2-7e2a-4143-a492-d5818802cdac&q=dddb62b2-7e2a-4143-a492-d5818802cdac&requestId=cfc1d841-4dab-4ffa-ab6f-fc2662a9b206"}}';
-    }
-
     private $responsePromise;
+
+    private static $mfaListSuccessfulResponse = '{
+        "success": true,
+        "status": 200,
+        "data": {
+            "configured_list": [
+                {
+                    "type": "BACKUPCODE"
+                },
+                {
+                    "type": "EMAIL",
+                    "mediums": [
+                        {
+                            "id": "99a5effd-584a-41ac-a0f8-849f9fc734b8",
+                            "key_name": "t*****t@w***s.in"
+                        }
+                    ]
+                },
+                {
+                    "type": "PASSWORD"
+                },
+                {
+                    "type": "SMS",
+                    "mediums": [
+                        {
+                            "id": "99a5effd-584a-41ac-a0f8-849f9fc734b8",
+                            "key_name": "+91******237"
+                        }
+                    ]
+                }
+            ]
+        }
+    }';
+
+    public static $invalidRequestIdResponsePayload = '{
+        "success": false,
+        "status": 400,
+        "error": {
+            "code": 10001,
+            "type": "WebhooksException",
+            "status": 400,
+            "referenceNumber": "5fe6355da4312d8b:23f16ded3d7de8f8:5fe6355da4312d8b:0",
+            "error": "Invalid request id"
+        }
+    }';
+
+    public static $emailMobileUsernameEmptyResponsePayload = '{
+        "success": false,
+        "status": 400,
+        "error": {
+            "code": 501,
+            "type": "WebhooksException",
+            "status": 400,
+            "referenceNumber": "6594f0261c8cd531:7b9a83ed90e3c757:6594f0261c8cd531:0",
+            "error": "given mobile_number or email or username is not matching with flow"
+        }
+    }';
 
     protected function setUp(): void {
         $this->setUpCidaas();
@@ -22,16 +74,31 @@ final class GetMFAListTest extends AbstractCidaasTestParent {
     }
 
     public function testGetMfaListForSuccessful() {
-        $this->mock->append(new Response(200, [], self::getMfaListSuccessfulResponse()));
-
+        $this->mock->append(new Response(200, [], self::$mfaListSuccessfulResponse));
         $promise = $this->responsePromise->then(function ($requestId) {
-            return $this->provider->loginWithCredentials($requestId, $_ENV['USERNAME']);
+            return $this->provider->getMfaList($requestId, 'user@widas.de');
         });
-
         $response = $promise->wait();
         assertTrue($response['success']);
         assertEquals(200, $response['status']);
-        assertEquals(self::$CODE, $response['data']['code']);
+    }
+
+    public function testGetMfaListForInvalidRequestId() {
+        $this->mock->append(new Response(200, [], self::$invalidRequestIdResponsePayload));
+        $promise = $this->provider->getMfaList('12345', 'user@widas.de');
+        $response = $promise->wait();
+        assertFalse($response['success']);
+        assertEquals(400, $response['status']);
+    }
+
+    public function testGetMfaListForEmptyMobileOrEmailOrUsername() {
+        $this->mock->append(new Response(200, [], self::$emailMobileUsernameEmptyResponsePayload));
+        $promise = $this->responsePromise->then(function ($requestId) {
+            return $this->provider->getMfaList("",$requestId);
+        });
+        $response = $promise->wait();
+        assertFalse($response['success']);
+        assertEquals(400, $response['status']);
     }
   }
 
