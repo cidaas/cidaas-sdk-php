@@ -78,7 +78,6 @@ class Cidaas
         $this->init = true;
     }
 
-
     /**
      * Retrieve the requestId for a given scope in order to start an oidc interaction.
      * @param string $scope for the requestId
@@ -88,8 +87,7 @@ class Cidaas
      */
     public function getRequestId(string $scope = 'openid', string $responseType = 'code', string $acceptLanguage = 'en-GB'): PromiseInterface
     {
-        $client = $this->createClient();
-
+        $url = $this->baseUrl . self::$requestIdUri;
         $params = [
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
@@ -97,22 +95,13 @@ class Cidaas
             "scope" => $scope,
             "nonce" => (string)time()
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json',
-                'Accept' => '*/*',
-                'accept-language' => $acceptLanguage
-            ]
+        $header = [
+            'Content-Type' => 'application/json',
+            'Accept' => '*/*',
+            'accept-language' => $acceptLanguage
         ];
-        $url = $this->baseUrl . self::$requestIdUri;
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            $parsedBody = $this->parseJson($body);
-            return $parsedBody['data']['requestId'];
-        });
+        $parsedBody = $this->makeRequest($params, $url, $header)->wait();
+        return $parsedBody['data']['requestId'];
     }
 
     /**
@@ -124,7 +113,6 @@ class Cidaas
     public function getRegistrationSetup(string $requestId, string $locale): PromiseInterface
     {
         $client = $this->createClient();
-
         $url = $this->baseUrl . self::$getRegistrationSetupUri;
         $params = [
             'requestId' => $requestId,
@@ -133,7 +121,6 @@ class Cidaas
         $options = [
             RequestOptions::QUERY => $params
         ];
-
         $responsePromise = $client->getAsync($url, $options);
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
@@ -150,27 +137,16 @@ class Cidaas
      */
     public function register(array $registrationFields, string $requestId, string $acceptLanguage = 'en-GB'): PromiseInterface
     {
-        $client = $this->createClient();
-
         $url = $this->baseUrl . self::$registerSdkUri;
         if (!isset($registrationFields['provider'])) {
             $registrationFields['provider'] = 'self';
         }
-        $postBody = json_encode($registrationFields, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json',
-                'requestId' => $requestId,
-                'accept-language' => $acceptLanguage
-            ],
+        $headers = [
+            'Content-Type' => 'application/json',
+            'requestId' => $requestId,
+            'accept-language' => $acceptLanguage
         ];
-
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        return $this->makeRequest($registrationFields, $url, $headers);
     }
 
     /**
@@ -183,7 +159,6 @@ class Cidaas
      */
     public function loginWithCredentials(string $username, string $username_type, string $password, string $requestId): PromiseInterface
     {
-        $client = $this->createClient();
         $url = $this->baseUrl . self::$loginSdkUri;
         $params = [
             'username' => $username,
@@ -191,19 +166,7 @@ class Cidaas
             'username_type' => $username_type,
             'requestId' => $requestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json'
-            ]
-        ];
-
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        return $this->makeRequest($params, $url);
     }
 
     /**
@@ -214,7 +177,6 @@ class Cidaas
      */
     public function loginWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array(), bool $pkceEnabled = false)
     {
-        $client = $this->createClient();
         $loginUrl = $this->openid_config['authorization_endpoint'];
         $loginUrl .= '?client_id=' . $this->clientId;
         $loginUrl .= '&response_type=code';
@@ -279,29 +241,18 @@ class Cidaas
      */
     public function changePassword(string $oldPassword, string $newPassword, string $confirmPassword, string $identityId, string $accessToken)
     {
-        $client = $this->createClient();
-
+        $url = $this->baseUrl . self::$changePasswordUri;
         $params = [
             'old_password' => $oldPassword,
             'new_password' => $newPassword,
             'confirm_password' => $confirmPassword,
             'identityId' => $identityId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer ' . $accessToken
-            ]
+        $headers = [
+            'Content-Type' => 'application/json',
+            'Authorization' => 'Bearer ' . $accessToken
         ];
-        $url = $this->baseUrl . self::$changePasswordUri;
-
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        return $this->makeRequest($params, $url, $headers)
     }
 
     /**
@@ -366,22 +317,15 @@ class Cidaas
      */
     public function getUserProfile(string $accessToken, string $sub = ""): PromiseInterface
     {
-        $client = $this->createClient();
         $url = $this->openid_config["userinfo_endpoint"];
         if (!empty($sub)) {
             $url .= "/" . $sub;
         }
-
-        $responsePromise = $client->requestAsync('POST', $url, [
-            "headers" => [
-                "Authorization" => "Bearer " . $accessToken,
-                'Content-Type' => 'application/json',
-            ],
-        ]);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        $headers = [
+            "Authorization" => "Bearer " . $accessToken,
+            'Content-Type' => 'application/json',
+        ];
+        return $this->makeRequest([], $url, $headers);
     }
 
     /**
@@ -393,28 +337,14 @@ class Cidaas
     public function initiateResetPassword(string $email, string $requestId): PromiseInterface
     {
         // TODO andere Medien statt email?
-        $client = $this->createClient();
-
+        $url = $this->baseUrl . self::$initiateResetPasswordUri;
         $params = [
             'email' => $email,
             'processingType' => 'CODE',
             'resetMedium' => 'email',
             'requestId' => $requestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json'
-            ]
-        ];
-        $url = $this->baseUrl . self::$initiateResetPasswordUri;
-
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        return $this->makeRequest($params, $url);
     }
 
     /**
@@ -423,32 +353,26 @@ class Cidaas
      * @param string $resetRequestId retrieved from {@see self::initiateResetPassword()}
      * @return PromiseInterface promise with exchangeId and resetRequestId or error
      */
-    public function handleResetPassword(string $code, string $resetRequestId, $version = "v2"): PromiseInterface
+    public function handleResetPassword(string $code, string $resetRequestId, $version = "v2")
     {
         $url = $this->baseUrl . self::$handleResetPasswordUri;
-        if ($version == "v3") {
-            $url = $this->baseUrl . "/password-srv/resetpassword?action=validatecode";
-        }
-
-        $client = $this->createClient();
-
         $params = [
             'code' => $code,
             'resetRequestId' => $resetRequestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json'
-            ]
-        ];
-
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        if ($version == "v3") {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($ch);
+            $redirectUri = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+            curl_close($ch);
+            $parts = parse_url($redirectUri);
+            parse_str($parts['query'], $query);
+            return $query;
+        }
+        return $this->makeRequest($params, $url);
     }
 
     /**
@@ -459,31 +383,28 @@ class Cidaas
      * @param string $resetRequestId from {@see self::handleResetPassword()}
      * @return PromiseInterface promise with success or error message
      */
-    public function resetPassword(string $password, string $confirmPassword, string $exchangeId, string $resetRequestId, $version = "v2"): PromiseInterface
+    public function resetPassword(string $password, string $confirmPassword, string $exchangeId, string $resetRequestId, $version = "v2")
     {
         $url = $this->baseUrl . self::$resetPasswordUri;
-        if ($version == "v3") {
-            $url = $this->baseUrl . "/password-srv/resetpassword?action=acceptreset";
-        }
-        $client = $this->createClient();
         $params = [
             'password' => $password,
             'confirmPassword' => $confirmPassword,
             'exchangeId' => $exchangeId,
             'resetRequestId' => $resetRequestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
-        $options = [
-            RequestOptions::BODY => $postBody,
-            RequestOptions::HEADERS => [
-                'Content-Type' => 'application/json'
-            ]
-        ];
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        if ($version == "v3") {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($ch);
+            $redirectUri = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+            curl_close($ch);
+            $parts = parse_url($redirectUri);
+            parse_str($parts['query'], $query);
+            return $query;
+        }
+        return $this->makeRequest($params, $url);
     }
 
     /**
@@ -497,7 +418,7 @@ class Cidaas
     public function updateProfile(string $sub, array $fields, string $accessToken, string $provider = 'self'): PromiseInterface
     {
         $client = $this->createClient();
-
+        $url = $this->baseUrl . self::$updateProfileUriPrefix . $sub;
         $fields['provider'] = $provider;
         $postBody = json_encode($fields, JSON_UNESCAPED_SLASHES);
         $options = [
@@ -507,7 +428,6 @@ class Cidaas
                 'Authorization' => 'Bearer ' . $accessToken
             ]
         ];
-        $url = $this->baseUrl . self::$updateProfileUriPrefix . $sub;
 
         $responsePromise = $client->requestAsync('PUT', $url, $options);
         return $responsePromise->then(function (ResponseInterface $response) {
@@ -524,30 +444,18 @@ class Cidaas
      */
     public function validateAccessToken(string $accessTokenToValidate, $accessTokenForApiAccess = ""): PromiseInterface
     {
-        $client = $this->createClient();
-
+        $url = $this->openid_config["introspection_endpoint"];
         $params = [
             'token_type_hint' => 'access_token',
             'token' => $accessTokenToValidate
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
         $headers = ['Content-Type' => 'application/json'];
         if (empty($accessTokenForApiAccess)) {
             $headers['Authorization'] = 'Basic ' . base64_encode($this->clientId . ":" . $this->clientSecret);
         } else {
             $headers['Authorization'] = 'Bearer ' . $accessTokenForApiAccess;
         }
-        $options = [
-            RequestOptions::HEADERS => $headers,
-            RequestOptions::BODY => $postBody
-        ];
-        $url = $this->openid_config["introspection_endpoint"];
-
-        $responsePromise = $client->requestAsync('POST', $url, $options);
-        return $responsePromise->then(function (ResponseInterface $response) {
-            $body = $response->getBody();
-            return $this->parseJson($body);
-        });
+        return $this->makeRequest($params, $url, $headers);
     }
 
     /**
@@ -556,15 +464,13 @@ class Cidaas
      * @param string $postLogoutUri (optional) to redirect to after logout
      * @return PromiseInterface promise with success (redirect) or error message
      */
-    public function logout(string $accessToken, string $postLogoutUri = ""): PromiseInterface
+    public function logout(string $accessToken, string $postLogoutUri = "")
     {
-        $client = $this->createClient();
         $url = $this->openid_config["end_session_endpoint"] . "?access_token_hint=" . $accessToken;
         if (!empty($postLogoutUri)) {
             $url .= "&post_logout_redirect_uri=" . urlencode($postLogoutUri);
         }
-
-        return $client->requestAsync('POST', $url, ['allow_redirects' => false]);
+        header('Location: ' . $url);
     }
 
     /**
@@ -577,7 +483,7 @@ class Cidaas
     {
         $url = $this->baseUrl . "/login-srv/social/login/" . strtolower($provider_name) . "/" . $request_id;
         foreach ($queryParameters as $key => $value) {
-            $registerUrl .= '&' . $key . '=' . $value;
+            $url .= '&' . $key . '=' . $value;
         }
         header('Location: ' . $url);
     }
@@ -592,7 +498,7 @@ class Cidaas
     {
         $url = $this->baseUrl . "/login-srv/social/register/" . strtolower($provider_name) . "/" . $request_id;
         foreach ($queryParameters as $key => $value) {
-            $registerUrl .= '&' . $key . '=' . $value;
+            $url .= '&' . $key . '=' . $value;
         }
         header('Location: ' . $url);
     }
@@ -639,7 +545,16 @@ class Cidaas
     {
         $url = $this->baseUrl . "/verification-srv/account/initiate";
         if ($version == "v3") {
-            $url = $url . "/sdk";
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($params));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_exec($ch);
+            $redirectUri = curl_getinfo($ch, CURLINFO_REDIRECT_URL);
+            curl_close($ch);
+            $parts = parse_url($redirectUri);
+            parse_str($parts['query'], $query);
+            return $query;
         }
         return $this->makeRequest($params, $url);
     }
@@ -673,7 +588,7 @@ class Cidaas
             'Content-type' => 'application/json',
             'requestId' => $requestId,
             'trackId' => $trackId,
-            'acceptlanguage' => $acceptlanguage
+            'acceptlanguage' => $acceptLanguage
         ];
         return $this->makeRequest($params, $url, $headers);
     }
@@ -735,7 +650,7 @@ class Cidaas
      */
     public function initiatePasswordlessLogin(string $request_id, string $type, string $email, string $medium_id)
     {
-        $allowed_types = ["email", "totp", "push", "backup_code", "password"];
+        $allowed_types = ["EMAIL", "TOTP", "PUSH", "BACKUP_CODE", "PASSWORD"];
         if (!in_array(strtoupper($type), $allowed_types)) {
             throw new \InvalidArgumentException('invalid type');
         }
@@ -759,7 +674,7 @@ class Cidaas
      */
     public function verifyPasswordlessLogin(string $type, string $exchange_id, string $pass_code, string $requestId)
     {
-        $allowed_types = ["email", "totp", "push", "backup_code", "password"];
+        $allowed_types = ["EMAIL", "TOTP", "PUSH", "BACKUP_CODE", "PASSWORD"];
         if (!in_array(strtoupper($type), $allowed_types)) {
             throw new \InvalidArgumentException('invalid type');
         }
