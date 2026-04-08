@@ -66,7 +66,7 @@ In addition to these required parameters, there are two optional constructor par
 - handler: to interfere with the http connections being performed
 - debug: to enable debug mode
 
-During construction, an http call is being performed to read base configuration data from the server.
+On the first request that needs OpenID configuration (for example `getRequestId` or `loginWithBrowser`), an HTTP call loads the base configuration from the server (`/.well-known/openid-configuration`).
 
 ### Integration of hosted login page
 In order to integrate a hosted login page, you might just implement a simple button, which itself calls the login method when clicked. By default pkce flow is disabled, to enable the pkce flow you must enable the flag $pkceEnabled by providing the value **true** in the function parameter.
@@ -167,11 +167,11 @@ In order to integrate a hosted register page, you might just implement a simple 
     $provider->registerWithBrowser();
 ?>
 ```
-After successful registration, the browser is redirected to the login page for you to login with the registered details. The reirection may sometimes differ based on the configuration of the client.
+After successful registration, the browser is redirected to the login page for you to login with the registered details. The redirection may sometimes differ based on the configuration of the client.
 
 ### Integration of social login page
 
-To integrate social login redirection, you might just implement a simple button which itself calls the login method when clicked. In order to access the login method, you need to retrieve a requestId first. The function requires the provider name(e.g: google, facebbok) and the requestId as functional parameter and optinally more query params can be added to the request url.
+To integrate social login redirection, you might just implement a simple button which itself calls the login method when clicked. In order to access the login method, you need to retrieve a requestId first. The function requires the provider name (e.g. google, facebook) and the requestId as functional parameter and optionally more query params can be added to the request url.
 
 ```php
 <?php
@@ -184,7 +184,7 @@ This will redirect to the login page of the social provider. After successful lo
 
 ### Integration of social registration page
 
-To integrate social registration redirection, you might just implement a simple button which itself calls the register method when clicked. In order to access the register method, you need to retrieve a requestId first. The function requires the provider name(e.g: google, facebbok) and  the requestId as functional parameter and optionally more query params can be added to the request url.
+To integrate social registration redirection, you might just implement a simple button which itself calls the register method when clicked. In order to access the register method, you need to retrieve a requestId first. The function requires the provider name (e.g. google, facebook) and the requestId as functional parameter and optionally more query params can be added to the request url.
 
 ```php
 <?php
@@ -193,11 +193,11 @@ To integrate social registration redirection, you might just implement a simple 
     })
 ?>
 ```
-This will redirect to the register page of the social provider. After successful registration, you can call the function loginWithSocial to start loging in to your cidaas client with the social provider.
+This will redirect to the register page of the social provider. After successful registration, you can call the function loginWithSocial to start logging in to your cidaas client with the social provider.
 
 ### Initiate multi factor authentication
 
-To initiate multi factor authentication use the function intiateMFA. You need to retrieve a requestId first. Allowed types are mentioned in the list below
+To initiate multi factor authentication use the function `initiateMFA`. The misspelled name `intiateMFA` is still available as a deprecated alias. You need to retrieve a requestId first. Allowed types are mentioned in the list below
 ```
     EMAIL
     SMS
@@ -220,12 +220,12 @@ To initiate multi factor authentication use the function intiateMFA. You need to
 <?php
     $resp = $provider->getRequestId('openid identities profile offline_access')->then(function ($requestId) {
         $params = [
-            "email" => 'account@cidaas.de'
-            "request_id" => $requestId,
-            "usage_type" => "MULTIFACTOR_AUTHENTICATION"
-        ]
-        $resp = $provider->intiateMFA('EMAIL', $params)->wait();
-    })
+            'email' => 'account@cidaas.de',
+            'request_id' => $requestId,
+            'usage_type' => 'MULTIFACTOR_AUTHENTICATION',
+        ];
+        return $provider->initiateMFA('EMAIL', $params);
+    })->wait();
 ?>
 ```
 
@@ -254,7 +254,7 @@ The api used in the function returns a response like shown below. You will requi
 
 ### Authenticate multi factor
 
-To authenticate multi factor you must first initiate the authentication process with the help of the function intiateMFA. You will be shared a passcode/verification code based on the type of authentication you prefer in the initiaition process. The types allowed for the authentication process are mentioned in the above section.
+To authenticate multi factor you must first initiate the authentication process with the help of the function `initiateMFA`. You will be shared a passcode/verification code based on the type of authentication you prefer in the initiation process. The types allowed for the authentication process are mentioned in the above section.
 
 ```php
 <?php
@@ -262,7 +262,7 @@ To authenticate multi factor you must first initiate the authentication process 
 ?>
 ```
 
-The api used in the function returns a response like shown below. After successful authentication you may proceed with your custom implementation. For any failure the attibute "success" in the response payload will have value false.
+The api used in the function returns a response like shown below. After successful authentication you may proceed with your custom implementation. For any failure the attribute "success" in the response payload will have value false.
 
 ```json
 {
@@ -287,7 +287,7 @@ The api used in the function returns a response like shown below. After successf
 
 ### Initiate account verification
 
-To initiate account verification use the function initiateAccountVerification. Account verification is done for newly created user account is not verified. If you are on cidaas v3, you must set the value **v3** to the function parameter **$version**. The paramter **$version** is optional. Currently v2 and v3 version are supported. If not provided the default version v2 is considered to process the request further. A sample of the function parameter $params is shown below
+To initiate account verification use the function initiateAccountVerification. Account verification is done for newly created user account is not verified. If you are on cidaas v3, you must set the value **v3** to the function parameter **$version**. The parameter **$version** is optional. Currently v2 and v3 version are supported. If not provided the default version v2 is considered to process the request further. A sample of the function parameter $params is shown below
 
 * Allowed values for verificationMedium
 
@@ -297,7 +297,7 @@ To initiate account verification use the function initiateAccountVerification. A
     ivr
 ```
 
-* Allowed values for verificationMedium
+* Allowed values for processingType
 
 ```
     CODE
@@ -307,13 +307,13 @@ To initiate account verification use the function initiateAccountVerification. A
 ```php
 <?php
     $params = [
-        "response_type": "token",
-        "verificationMedium": "email",
-        "processingType": "code",
-        "client_id": "103a3f9c-1a2d-4e47-940k-bad7f19d9604",
-        "redirect_uri": "https://test.cidaas.com/user-profile/editprofile",
-        "email": "account@cidaas.de"
-    ]
+        'response_type' => 'token',
+        'verificationMedium' => 'email',
+        'processingType' => 'code',
+        'client_id' => '103a3f9c-1a2d-4e47-940k-bad7f19d9604',
+        'redirect_uri' => 'https://test.cidaas.com/user-profile/editprofile',
+        'email' => 'account@cidaas.de',
+    ];
     $provider->initiateAccountVerification($params)->wait();
 ?>
 ```
@@ -341,7 +341,7 @@ The api used in the function returns a response like shown below. For failed ver
 
 ### Perform progressive registration
 
-Initiates progressive registration for missing required registration fields after an account is created in cidaas system. Below are the fields which can be updated in the process of progessive registration. All these fields need to passed in the function parameter $params
+Initiates progressive registration for missing required registration fields after an account is created in cidaas system. Below are the fields which can be updated in the process of progressive registration. All these fields need to passed in the function parameter $params
 
 | field name       | type         |
 |------------------|--------------|
@@ -408,12 +408,12 @@ The type IAddressEntity and IUserGroupMap contains the below fields
 ```php
 <?php
     $params = [
-        "given_name": "Firstname",
-        "username": "test_username",
-        "family_name": "Lastname",
-        "mobile_number": "7865637869"
-    ]
-    $resp = $provider->progressiveRegistration("103a3f9c-1a2d-4e47-940k-bad7f19d9604", "203a3f9c-1a2d-4e47-940k-bad7f19d9604", $params)->wait();
+        'given_name' => 'Firstname',
+        'username' => 'test_username',
+        'family_name' => 'Lastname',
+        'mobile_number' => '7865637869',
+    ];
+    $resp = $provider->progressiveRegistration('103a3f9c-1a2d-4e47-940k-bad7f19d9604', '203a3f9c-1a2d-4e47-940k-bad7f19d9604', $params)->wait();
 ?>
 ```
 
@@ -452,12 +452,12 @@ To accept consent by sub use the function acceptConsent. The function accepts a 
 ```php
 <?php
      $params = [
-        "client_id": "1234567",
-        "consent_id": "1234567",
-        "consent_version_id": "1",
-        "sub": "1234567",
-        "url" : "https://cidaas.de/accept-consent"
-    ]
+        'client_id' => '1234567',
+        'consent_id' => '1234567',
+        'consent_version_id' => '1',
+        'sub' => '1234567',
+        'url' => 'https://cidaas.de/accept-consent',
+    ];
     $resp = $provider->acceptConsent($params)->wait();
 ?>
 ```
@@ -483,7 +483,7 @@ sub
 
 ### Initiate passwordless login
 
-To initate passwordless login use the function initiatePasswordlessLogin. In order to initiate the process, you need to retrieve a requestId first. The function additionally accepts the below params
+To initiate passwordless login use the function initiatePasswordlessLogin. In order to initiate the process, you need to retrieve a requestId first. The function additionally accepts the below params
 
 | field | type |
 |------ | ---- |
@@ -515,9 +515,11 @@ To verify passwordless login after initiating the process use the function verif
 <?php
 
     $provider->getRequestId('openid identities profile offline_access')->then(function ($requestId) {
-        $resp1 = $provider->initiatePasswordlessLogin($requestId, "email", 'account@cidaas.de', '1234567')->wait();
-        $resp2 = $provider->verifyPasswordlessLogin("email",$resp1->exchange_id, '123456', $requestId)->wait();
-    })
+        $resp1 = $provider->initiatePasswordlessLogin($requestId, 'email', 'account@cidaas.de', '1234567')->wait();
+        // Use the exchange_id from $resp1['data'] (exact shape depends on the API response)
+        $exchangeId = $resp1['data']['exchange_id']['exchange_id'] ?? $resp1['data']['exchange_id'] ?? '';
+        return $provider->verifyPasswordlessLogin('email', $exchangeId, '123456', $requestId);
+    })->wait();
 ?>
 ```
 
@@ -574,7 +576,7 @@ To validate the code use the function handleResetPassword. The code will be sent
 
 ### Reset Password
 
-To complete the password reset process use the function resetPassword. In cidaas version v2 the function returns a json response with success tru or false. If you are on cidaas v3, you must set the value **v3** to the function parameter version
+To complete the password reset process use the function resetPassword. In cidaas version v2 the function returns a json response with success true or false. If you are on cidaas v3, you must set the value **v3** to the function parameter version
 
 | field | type | description |
 |------ | ---- | ----------- |
