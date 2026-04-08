@@ -28,12 +28,13 @@ class Cidaas
     private static string $resetPasswordUri = '/users-srv/resetpassword/accept';
     private static string $tokenUri = '/token-srv/token';
 
-    private array $openid_config;
+    /** @var array<string, mixed> */
+    private array $openid_config = [];
     private string $baseUrl = "";
     private string $clientId = "";
     private string $clientSecret = "";
     private string $redirectUri = "";
-    private HandlerStack $handler;
+    private ?HandlerStack $handler = null;
     private bool $debug = false;
     /** @var bool has the init method already been called? */
     private bool $init = false;
@@ -47,7 +48,7 @@ class Cidaas
      * @param HandlerStack|null $handler (optional) for http requests
      * @param bool $debug (optional) to enable debugging
      */
-    public function __construct(string $baseUrl, string $clientId, string $clientSecret, string $redirectUri, HandlerStack $handler = null, bool $debug = false)
+    public function __construct(string $baseUrl, string $clientId, string $clientSecret, string $redirectUri, ?HandlerStack $handler = null, bool $debug = false)
     {
         $this->validate($baseUrl, 'Base URL');
         $this->validate($clientId, 'Client-ID');
@@ -58,7 +59,7 @@ class Cidaas
         $this->clientId = $clientId;
         $this->clientSecret = $clientSecret;
         $this->redirectUri = $redirectUri;
-        if (isset($handler)) {
+        if ($handler !== null) {
             $this->handler = $handler;
         }
         $this->debug = $debug;
@@ -576,8 +577,8 @@ class Cidaas
     public function loginWithSocial(string $provider_name, string $request_id, array $queryParameters = array())
     {
         $url = $this->baseUrl . "/login-srv/social/login/" . strtolower($provider_name) . "/" . $request_id;
-        foreach ($queryParameters as $key => $value) {
-            $registerUrl .= '&' . $key . '=' . $value;
+        if ($queryParameters !== []) {
+            $url .= '?' . http_build_query($queryParameters);
         }
         header('Location: ' . $url);
     }
@@ -591,8 +592,8 @@ class Cidaas
     public function registerWithSocial($provider_name, $request_id, array $queryParameters = array())
     {
         $url = $this->baseUrl . "/login-srv/social/register/" . strtolower($provider_name) . "/" . $request_id;
-        foreach ($queryParameters as $key => $value) {
-            $registerUrl .= '&' . $key . '=' . $value;
+        if ($queryParameters !== []) {
+            $url .= '?' . http_build_query($queryParameters);
         }
         header('Location: ' . $url);
     }
@@ -602,10 +603,18 @@ class Cidaas
      * @param string $type the type of multi factor. e.g: email, sms
      * @param array $params an associate array with the params that api accepts as request body
      */
-    public function intiateMFA($type, $params)
+    public function initiateMFA($type, $params)
     {
         $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . strtolower($type);
         return $this->makeRequest($params, $url);
+    }
+
+    /**
+     * @deprecated Use {@see self::initiateMFA()} instead. Kept for backward compatibility (typo in original name).
+     */
+    public function intiateMFA($type, $params)
+    {
+        return $this->initiateMFA($type, $params);
     }
 
     /**
@@ -647,7 +656,7 @@ class Cidaas
     /**
      * Verify account
      * @param string $accvid accvid recieved when initiating the account verification
-     * @param array $code code received to the users account to verify after registration
+     * @param string $code code received to the users account to verify after registration
      */
     public function verifyAccount(string $accvid, string $code)
     {
@@ -673,7 +682,7 @@ class Cidaas
             'Content-type' => 'application/json',
             'requestId' => $requestId,
             'trackId' => $trackId,
-            'acceptlanguage' => $acceptlanguage
+            'acceptlanguage' => $acceptLanguage
         ];
         return $this->makeRequest($params, $url, $headers);
     }
@@ -736,14 +745,15 @@ class Cidaas
     public function initiatePasswordlessLogin(string $request_id, string $type, string $email, string $medium_id)
     {
         $allowed_types = ["email", "totp", "push", "backup_code", "password"];
-        if (!in_array(strtoupper($type), $allowed_types)) {
+        $normalizedType = strtolower($type);
+        if (!in_array($normalizedType, $allowed_types, true)) {
             throw new \InvalidArgumentException('invalid type');
         }
-        $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . strtolower($type);
+        $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . $normalizedType;
         $params = [
             'usage_type' => "PASSWORDLESS_AUTHENTICATION",
             'request_id' => $request_id,
-            'type' => $type,
+            'type' => $normalizedType,
             'email' => $email,
             'medium_id' => $medium_id
         ];
@@ -760,14 +770,15 @@ class Cidaas
     public function verifyPasswordlessLogin(string $type, string $exchange_id, string $pass_code, string $requestId)
     {
         $allowed_types = ["email", "totp", "push", "backup_code", "password"];
-        if (!in_array(strtoupper($type), $allowed_types)) {
+        $normalizedType = strtolower($type);
+        if (!in_array($normalizedType, $allowed_types, true)) {
             throw new \InvalidArgumentException('invalid type');
         }
-        $url = $this->baseUrl . "/verification-srv/v2/authenticate/authenticate/" . strtolower($type);
+        $url = $this->baseUrl . "/verification-srv/v2/authenticate/authenticate/" . $normalizedType;
         $params = [
             'exchange_id' => $exchange_id,
             'pass_code' => $pass_code,
-            'type' => $type,
+            'type' => $normalizedType,
             'requestId' => $requestId,
         ];
         return $this->makeRequest($params, $url);
@@ -781,7 +792,7 @@ class Cidaas
 
     private function __createClient(): Client
     {
-        if (isset($this->handler)) {
+        if ($this->handler !== null) {
             return new Client(['handler' => $this->handler, 'debug' => $this->debug]);
         }
         return new Client(['debug' => $this->debug]);
