@@ -2,16 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, develop, development]
   pull_request:
-    branches: [master, main]
+    branches: [master, main, develop, development]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php-version: ['7.4', '8.0', '8.2']
+        php-version: ['8.2', '8.3']
     steps:
       - uses: actions/checkout@v4
 

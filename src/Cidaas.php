@@ -215,14 +215,15 @@ class Cidaas
      */
     public function loginWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array(), bool $pkceEnabled = false)
     {
-        $client = $this->createClient();
-        $loginUrl = $this->openid_config['authorization_endpoint'];
-        $loginUrl .= '?client_id=' . $this->clientId;
-        $loginUrl .= '&response_type=code';
-        $loginUrl .= '&scope=' . urlencode($scope);
-        $loginUrl .= '&redirect_uri=' . $this->redirectUri;
-        $loginUrl .= '&nonce=' . time();
-        $loginUrl .= '&view_type=' . "login";
+        $this->createClient();
+        $params = [
+            'client_id' => $this->clientId,
+            'response_type' => 'code',
+            'scope' => $scope,
+            'redirect_uri' => $this->redirectUri,
+            'nonce' => time(),
+            'view_type' => 'login',
+        ];
 
         if ($pkceEnabled) {
             session_start();
@@ -230,12 +231,12 @@ class Cidaas
             $_SESSION['code-verifier'] = $code_verifier;
             $str = strtr(base64_encode(hash('sha256', $code_verifier, true)), '+/', '-_');
             $code_challenge = rtrim($str, '=');
-            $loginUrl .= '&code_challenge=' . $code_challenge . '&code_challenge_method=S256';
+            $params['code_challenge'] = $code_challenge;
+            $params['code_challenge_method'] = 'S256';
         }
 
-        foreach ($queryParameters as $key => $value) {
-            $loginUrl .= '&' . $key . '=' . $value;
-        }
+        $params = array_merge($params, $queryParameters);
+        $loginUrl = $this->openid_config['authorization_endpoint'] . '?' . http_build_query($params);
         header('Location: ' . $loginUrl);
     }
     /**
@@ -246,16 +247,16 @@ class Cidaas
     public function registerWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array())
     {
         $this->initClient();
-        $registerUrl = $this->openid_config['authorization_endpoint'];
-        $registerUrl .= '?client_id=' . $this->clientId;
-        $registerUrl .= '&response_type=code';
-        $registerUrl .= '&scope=' . urlencode($scope);
-        $registerUrl .= '&redirect_uri=' . $this->redirectUri;
-        $registerUrl .= '&nonce=' . time();
-        $registerUrl .= '&view_type=' . "register";
-        foreach ($queryParameters as $key => $value) {
-            $registerUrl .= '&' . $key . '=' . $value;
-        }
+        $params = [
+            'client_id' => $this->clientId,
+            'response_type' => 'code',
+            'scope' => $scope,
+            'redirect_uri' => $this->redirectUri,
+            'nonce' => time(),
+            'view_type' => 'register',
+        ];
+        $params = array_merge($params, $queryParameters);
+        $registerUrl = $this->openid_config['authorization_endpoint'] . '?' . http_build_query($params);
         header('Location: ' . $registerUrl);
     }
 
@@ -670,10 +671,10 @@ class Cidaas
 
     /**
      * Initiates progressive registration for missing required registration fields after an account is created in cidaas system
-     * @param string $request_id the request_id of the oidc session. once can generate a request_id by calling the function getRequestId
+     * @param string $requestId the request_id of the oidc session. once can generate a request_id by calling the function getRequestId
      * @param string $trackId the track_id recieved of the oidc session
-     * @param string $acceptLanguage the locale
      * @param array $params an associate array with the params that api accepts as request body
+     * @param string $acceptLanguage the locale
      */
     public function progressiveRegistration($requestId, $trackId, $params, $acceptLanguage = 'en-US')
     {

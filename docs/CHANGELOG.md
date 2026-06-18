@@ -1,3 +1,25 @@
+## [Unreleased]
+
+### BREAKING CHANGES
+
+* Minimum supported PHP version raised from 7.4 to **8.2**. PHP 7.4, 8.0, and 8.1 are no longer supported.
+* PHPUnit upgraded from 9.x to **10.5** (dev dependency; requires PHP 8.1+).
+
+### Features
+
+* Build hosted login and registration redirect URLs with `http_build_query` so `redirect_uri` and custom query parameters are URL-encoded correctly (`loginWithBrowser`, `registerWithBrowser`).
+* Run GitHub Actions CI on PHP **8.2** and **8.3** for pushes and pull requests to `master`, `main`, `develop`, and `development`.
+* Document branching strategy and PHP 8.2 requirement in README.
+
+### Bug Fixes
+
+* Remove unused `$client` variable in `loginWithBrowser`.
+
+### Tests
+
+* Add regression tests for encoded redirect URIs and query parameters in `LoginWithBrowserTest`.
+* Update PHPUnit configuration for PHPUnit 10.
+
 ## [1.3.4](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/compare/v1.3.3...v1.3.4) (2024-07-29)
 
 

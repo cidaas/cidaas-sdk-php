@@ -16,8 +16,20 @@
 ### Requirements
 
 Make sure you have installed all of the following prerequisites on your development machine:
- - PHP version 7.4.0 or higher
+ - PHP version 8.2.0 or higher
  - Download and install the composer
+
+### Branching and CI
+
+This repository uses the following branches:
+
+| Branch | Purpose |
+|--------|---------|
+| `master` | Stable release branch (default) |
+| `develop` | Primary integration branch for ongoing development |
+| `development` | Alternate development branch; changes are merged into `develop` |
+
+Open pull requests against `develop` (or `master` for release fixes). GitHub Actions CI runs on pushes and pull requests targeting `master`, `main`, `develop`, or `development`.
 
 ## Installation
 

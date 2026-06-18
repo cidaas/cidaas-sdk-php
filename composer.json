@@ -19,15 +19,15 @@
     "openid connect"
   ],
   "require": {
-    "php": "^7.4 || ^8.0",
+    "php": "^8.2",
     "guzzlehttp/guzzle": "^7.2.0",
     "ext-json": "*"
   },
   "require-dev": {
     "roave/security-advisories": "dev-master",
-    "phpunit/phpunit": "^9.4.1",
+    "phpunit/phpunit": "^10.5",
     "vlucas/phpdotenv": "^5.3.0",
-    "phpunit/php-code-coverage": "^9.2",
+    "phpunit/php-code-coverage": "^10.1",
     "phpstan/phpstan": "^1.10"
   },
   "scripts": {
