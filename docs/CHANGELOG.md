@@ -1,3 +1,30 @@
+# [2.0.0](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/compare/v1.3.4...v2.0.0) (2026-06-19)
+
+
+### Bug Fixes
+
+* [#143](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/issues/143) added code coverage ([8ddc9ba](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/8ddc9baa1e3fe506e0c1ee91ff4071283e7c2801))
+* [#143](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/issues/143) enable xdebug for code coverage ([9b4cae6](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/9b4cae67e4966802c20ceeabf917303fc853c7a7))
+* [#143](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/issues/143) remove printenv ([ee71950](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/ee719502cefae02d8625daffa396e6779c4e7bdd))
+* # enable xdebug for codecoverage ([79356bb](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/79356bb977fffa532a892bb1002bed6b868788d4))
+* # enabling xdebug mode ([3ee13d3](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/3ee13d3be9a803f4e544bac7a63deb04ba305595))
+* drop pinned tar version in codecoverage job ([8ac8b29](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/8ac8b29489af12bc8c4d099697c913e785cb2ea2))
+
+
+* feat!: require PHP 8.2 and encode OAuth browser redirect URLs ([86857d7](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/86857d7bacf7dc18a816781dd62a267258201cde))
+
+
+### BREAKING CHANGES
+
+* Minimum supported PHP version is now 8.2. PHP 7.4, 8.0, and 8.1 are no longer supported. Dev tooling upgraded to PHPUnit 10.
+
+- Build loginWithBrowser and registerWithBrowser URLs with http_build_query
+- Run CI on PHP 8.2/8.3 and develop/development branches
+- Document branching and PHP 8.2 requirement in README
+- Add redirect encoding regression tests and PHPUnit 10 config
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+
 ## [Unreleased]
 
 ### BREAKING CHANGES
