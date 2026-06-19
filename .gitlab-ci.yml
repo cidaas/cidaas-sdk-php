@@ -1,7 +1,11 @@
 include:
-  - project: "widas/codequality"
-    ref: master
-    file: "ci_templates/php8.gitlab-ci.yml"
+  - local: ci_templates/php8.gitlab-ci.yml
+
+variables:
+  SKIP_DEPENDENCY_SCAN: "true"
+  SKIP_CODE_QUALITY: "true"
+  SKIP_CODE_QUALITY_BADGES: "true"
+  SKIP_PAGES: "true"
 
 stages:
   - test
@@ -11,28 +15,19 @@ stages:
   - publish
 
 codecoverage:
-  image: php:fpm-alpine
+  image: php:8.2-fpm-alpine
   before_script:
     - apk add --no-cache tar git zip unzip $PHPIZE_DEPS linux-headers
     - pecl install xdebug
     - docker-php-ext-enable xdebug
     - curl -sS https://getcomposer.org/installer | php
-    - php composer.phar install
+    - php composer.phar install --no-interaction --prefer-dist
   script:
     - XDEBUG_MODE=coverage php vendor/bin/phpunit --coverage-text | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g" > coverage_report.txt
   coverage: '/Lines:\s+(\d+.\d+)%/'
   artifacts:
     paths:
       - coverage_report.txt
-
-
-create_codequality_badges:
-  rules:
-    - when: never
-
-pages:
-  before_script:
-    - mkdir public
 
 release:
   image: docker-registry.widas.de:5050/dockerregistry/common/semantic-release:v1.0.5
