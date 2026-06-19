@@ -1,3 +1,11 @@
+## [2.0.1](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/compare/v2.0.0...v2.0.1) (2026-06-19)
+
+
+### Bug Fixes
+
+* update versions in changelog ([26960d0](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/26960d0a52d6942b13bc87620c5b7843a93120d6))
+* update versions in changelog ([211c2fd](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/211c2fd03cf1e940a9ff428d8730df235d6de7bc))
+
 ## 2.0.0
 
 ### BREAKING CHANGES
