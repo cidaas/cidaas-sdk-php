@@ -12,6 +12,7 @@
 * Harden PKCE: safe `session_start`, dedicated session keys, require verifier in `getAccessToken`, clear after use; PKCE also available on `registerWithBrowser`.
 * Use cryptographically secure nonces instead of `time()`.
 * URL-encode path segments for profile/social redirects; keep initiateMFA type-unrestricted (legacy behaviour), validate authenticateMFA types against the documented allowlist.
+* ensureSession falls back to an in-memory `$_SESSION` when PHP sessions are disabled or headers were already sent.
 * Send logout `access_token_hint` in the POST body instead of the query string.
 
 ### Bug Fixes

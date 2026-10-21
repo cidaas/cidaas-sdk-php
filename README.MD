@@ -209,7 +209,7 @@ This will redirect to the register page of the social provider. After successful
 
 ### Initiate multi factor authentication
 
-To initiate multi factor authentication use the function `initiateMFA`. The misspelled name `intiateMFA` is still available as a deprecated alias. You need to retrieve a requestId first. Allowed types are mentioned in the list below
+To initiate multi factor authentication use the function `initiateMFA`. The misspelled name `intiateMFA` is still available as a deprecated alias. You need to retrieve a requestId first. `initiateMFA` does **not** restrict the type string (any value is forwarded to the API, lowercased). Common types include:
 ```
     EMAIL
     SMS
@@ -263,7 +263,7 @@ The api used in the function returns a response like shown below. You will requi
 
 ### Authenticate multi factor
 
-To authenticate multi factor you must first initiate the authentication process with the help of the function `initiateMFA`. You will be shared a passcode/verification code based on the type of authentication you prefer in the initiation process. The types allowed for the authentication process are mentioned in the above section.
+To authenticate multi factor you must first initiate the authentication process with the help of the function `initiateMFA`. You will be shared a passcode/verification code based on the type of authentication you prefer in the initiation process. `authenticateMFA` validates the type against the common list above (invalid types throw `InvalidArgumentException`).
 
 ```php
 <?php
