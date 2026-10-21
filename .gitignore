@@ -9,3 +9,8 @@ node_modules
 phpunit.xml
 
 .gitnexus
+
+# Local credentials — never commit real secrets
+tests/testconfig.local.env
+tests/integration-testconfig.local.env
+*.local.env

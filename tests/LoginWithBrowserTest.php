@@ -8,6 +8,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use function PHPUnit\Framework\assertStringContainsString;
+use function PHPUnit\Framework\assertStringNotContainsString;
 
 final class LoginWithBrowserTest extends AbstractCidaasTestParent {
     private static $LOGIN_URL = 'http://localhost:1111';
@@ -34,6 +35,7 @@ final class LoginWithBrowserTest extends AbstractCidaasTestParent {
         );
         assertStringContainsString('view_type=login', $location);
         assertStringContainsString('nonce=', $location);
+        assertStringContainsString('state=', $location);
     }
 
     public function test_loginWithBrowser_encodesRedirectUriAndQueryParameters(): void
@@ -59,6 +61,23 @@ final class LoginWithBrowserTest extends AbstractCidaasTestParent {
         assertStringContainsString(http_build_query(['locale' => 'de-DE', 'x' => 'a b']), $location);
         assertStringContainsString('view_type=login', $location);
         assertStringContainsString('nonce=', $location);
+        assertStringContainsString('state=', $location);
+    }
+
+    public function test_loginWithBrowser_doesNotAllowQueryParametersToOverrideRequiredOAuthParams(): void
+    {
+        $this->provider->loginWithBrowser('openid', [
+            'client_id' => 'attacker-client',
+            'redirect_uri' => 'https://evil.example/callback',
+            'response_type' => 'token',
+        ]);
+
+        $location = parent::$headers[0];
+        assertStringContainsString('client_id=' . urlencode($_ENV['CIDAAS_CLIENT_ID']), $location);
+        assertStringContainsString('redirect_uri=' . urlencode($_ENV['CIDAAS_REDIRECT_URI']), $location);
+        assertStringContainsString('response_type=code', $location);
+        assertStringNotContainsString('attacker-client', $location);
+        assertStringNotContainsString('evil.example', $location);
     }
 
     public function test_registerWithBrowser_encodesRedirectUriAndQueryParameters(): void
@@ -84,5 +103,6 @@ final class LoginWithBrowserTest extends AbstractCidaasTestParent {
         assertStringContainsString(http_build_query(['locale' => 'en-US']), $location);
         assertStringContainsString('view_type=register', $location);
         assertStringContainsString('nonce=', $location);
+        assertStringContainsString('state=', $location);
     }
 }

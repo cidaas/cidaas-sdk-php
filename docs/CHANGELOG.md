@@ -1,3 +1,24 @@
+## Unreleased
+
+### Features
+
+* Allow empty client secret for public / PKCE clients (`authorization_code` and `refresh_token`); `client_credentials` still requires a secret.
+
+### Security
+
+* Remove real client secrets and passwords from committed `tests/testconfig.env` (placeholders only).
+* Add OAuth `state` to `loginWithBrowser` / `registerWithBrowser` and validate it in `loginCallback` when a flow was started by the SDK.
+* Prevent caller `queryParameters` from overriding required OAuth params (`client_id`, `redirect_uri`, etc.).
+* Harden PKCE: safe `session_start`, dedicated session keys, require verifier in `getAccessToken`, clear after use; PKCE also available on `registerWithBrowser`.
+* Use cryptographically secure nonces instead of `time()`.
+* URL-encode path segments for profile/social redirects; validate MFA type on initiate.
+* Send logout `access_token_hint` in the POST body instead of the query string.
+
+### Bug Fixes
+
+* Guard missing `requestId` in auth request responses and failed `json_encode` bodies.
+* Default unit-test debug mode to `false`.
+
 ## [2.0.1](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/compare/v2.0.0...v2.0.1) (2026-06-19)
 
 

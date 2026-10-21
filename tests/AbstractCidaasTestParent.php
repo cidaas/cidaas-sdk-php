@@ -41,7 +41,7 @@ abstract class AbstractCidaasTestParent extends TestCase {
      * @param bool $integrationTest {@code true} for integration testing, {@code false} for unit testing
      * @param bool $debug {@code true} to enable debugging, {@code false} to disable debugging
      */
-    protected function setUpCidaas($integrationTest = false, $debug = true): void {
+    protected function setUpCidaas($integrationTest = false, $debug = false): void {
         Dotenv::createImmutable(__DIR__, 'testconfig.env')->load();
         self::$headers = [];
 

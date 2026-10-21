@@ -87,7 +87,7 @@ In order to integrate a hosted login page, you might just implement a simple but
     $provider->loginWithBrowser();
 ?>
 ```
-After successful login, the browser is redirected to your selected redirectUri (see Prerequisites). Using the method `loginCallback` enables you to retrieve the authorization code for retrieving access and refresh tokens.
+After successful login, the browser is redirected to your selected redirectUri (see Prerequisites). Using the method `loginCallback` enables you to retrieve the authorization code for retrieving access and refresh tokens. When the login was started with `loginWithBrowser` / `registerWithBrowser`, the SDK stores an OAuth `state` value in the PHP session and `loginCallback` validates it (throws if missing or mismatched).
 ```php
 <?php
 $parameters = $provider->loginCallback();

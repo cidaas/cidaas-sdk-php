@@ -41,8 +41,10 @@ final class LogoutTest extends AbstractCidaasTestParent {
         $request = $this->mock->getLastRequest();
         assertEquals('POST', $request->getMethod());
         assertEquals('/session/end_session', $request->getUri()->getPath());
-        assertStringContainsString('access_token_hint=' . self::$ACCESS_TOKEN, $request->getUri()->getQuery());
-        assertStringContainsString('post_logout_redirect_uri=' . urlencode(self::$postLogoutUri), $request->getUri()->getQuery());
+        assertEquals('', $request->getUri()->getQuery());
+        $body = (string)$request->getBody();
+        assertStringContainsString('access_token_hint=' . urlencode(self::$ACCESS_TOKEN), $body);
+        assertStringContainsString('post_logout_redirect_uri=' . urlencode(self::$postLogoutUri), $body);
     }
 
     public function test_logout_withAccessTokenAndNoPostLogoutUri_serverCalledWithAccessToken() {
@@ -55,8 +57,10 @@ final class LogoutTest extends AbstractCidaasTestParent {
         $request = $this->mock->getLastRequest();
         assertEquals('POST', $request->getMethod());
         assertEquals('/session/end_session', $request->getUri()->getPath());
-        assertStringContainsString('access_token_hint=' . self::$ACCESS_TOKEN, $request->getUri()->getQuery());
-        assertStringNotContainsString('post_logout_redirect_uri', $request->getUri()->getQuery());
+        assertEquals('', $request->getUri()->getQuery());
+        $body = (string)$request->getBody();
+        assertStringContainsString('access_token_hint=' . urlencode(self::$ACCESS_TOKEN), $body);
+        assertStringNotContainsString('post_logout_redirect_uri', $body);
     }
 
     public function test_logout_withAccessTokenAndPostLogoutUri_returnsRedirectResponse() {
