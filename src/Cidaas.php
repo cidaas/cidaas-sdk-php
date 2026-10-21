@@ -644,12 +644,13 @@ class Cidaas
 
     /**
      * Initiates multi factor authentication.
-     * @param string $type MFA type (see README / {@see self::assertMfaType()})
+     * No type allowlist (any type string is accepted, matching previous SDK behaviour).
+     * @param string $type MFA type, e.g. email, sms, totp, push
      * @param array $params an associate array with the params that api accepts as request body
      */
     public function initiateMFA($type, $params)
     {
-        $normalizedType = $this->assertMfaType((string)$type);
+        $normalizedType = strtolower((string)$type);
         $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . rawurlencode($normalizedType);
         return $this->makeRequest($params, $url);
     }
@@ -667,7 +668,7 @@ class Cidaas
      * @param string $exchange_id the exchange_id received in the response body while initiating mfa
      * @param string $sub the sub received in the response body while initiating mfa
      * @param string $pass_code the verification code recieved to the prefered mfa type
-     * @param string $type MFA type (same allowlist as {@see self::initiateMFA()})
+     * @param string $type MFA type (validated against documented allowlist)
      */
     public function authenticateMFA(string $exchange_id, string $sub, string $pass_code, string $type)
     {
@@ -897,24 +898,23 @@ class Cidaas
 
     private function ensureSession(): void
     {
-        $status = session_status();
-        if ($status === PHP_SESSION_DISABLED) {
-            throw new \RuntimeException(
-                'PHP sessions are disabled; OAuth state and PKCE require an active session. Enable session support in php.ini.'
-            );
-        }
-        if ($status === PHP_SESSION_ACTIVE) {
+        if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
-        if ($status === PHP_SESSION_NONE) {
-            if (!headers_sent()) {
-                session_start();
-                return;
-            }
-            // Headers already sent (e.g. CLI/PHPUnit): keep an in-memory $_SESSION for this request.
+        if (session_status() === PHP_SESSION_DISABLED) {
             if (!isset($_SESSION) || !is_array($_SESSION)) {
                 $_SESSION = [];
             }
+            return;
+        }
+        // PHP_SESSION_NONE
+        if (!headers_sent()) {
+            session_start();
+            return;
+        }
+        // Headers already sent (e.g. CLI/PHPUnit): keep an in-memory $_SESSION for this request.
+        if (!isset($_SESSION) || !is_array($_SESSION)) {
+            $_SESSION = [];
         }
     }
 
@@ -959,7 +959,7 @@ class Cidaas
     }
 
     /**
-     * Normalize and validate MFA types for initiateMFA / authenticateMFA.
+     * Normalize and validate MFA types for authenticateMFA.
      */
     private function assertMfaType(string $type): string
     {
