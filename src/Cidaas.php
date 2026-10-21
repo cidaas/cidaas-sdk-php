@@ -643,14 +643,14 @@ class Cidaas
     }
 
     /**
-     * Initiates multi factore authentication
-     * @param string $type the type of multi factor. e.g: email, sms
+     * Initiates multi factor authentication.
+     * @param string $type MFA type (see README / {@see self::assertMfaType()})
      * @param array $params an associate array with the params that api accepts as request body
      */
     public function initiateMFA($type, $params)
     {
-        $normalizedType = $this->assertMfaType($type);
-        $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . $normalizedType;
+        $normalizedType = $this->assertMfaType((string)$type);
+        $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . rawurlencode($normalizedType);
         return $this->makeRequest($params, $url);
     }
 
@@ -663,16 +663,16 @@ class Cidaas
     }
 
     /**
-     * Validates multi factore authentication
+     * Validates multi factor authentication.
      * @param string $exchange_id the exchange_id received in the response body while initiating mfa
      * @param string $sub the sub received in the response body while initiating mfa
      * @param string $pass_code the verification code recieved to the prefered mfa type
-     * @param string $type the type of multi factor. e.g: email, sms
+     * @param string $type MFA type (same allowlist as {@see self::initiateMFA()})
      */
     public function authenticateMFA(string $exchange_id, string $sub, string $pass_code, string $type)
     {
         $normalizedType = $this->assertMfaType($type);
-        $url = $this->baseUrl . "/verification-srv/v2/authenticate/authenticate/" . $normalizedType;
+        $url = $this->baseUrl . "/verification-srv/v2/authenticate/authenticate/" . rawurlencode($normalizedType);
         $params = [
             'exchange_id' => $exchange_id,
             'sub' => $sub,
@@ -897,10 +897,16 @@ class Cidaas
 
     private function ensureSession(): void
     {
-        if (session_status() === PHP_SESSION_ACTIVE) {
+        $status = session_status();
+        if ($status === PHP_SESSION_DISABLED) {
+            throw new \RuntimeException(
+                'PHP sessions are disabled; OAuth state and PKCE require an active session. Enable session support in php.ini.'
+            );
+        }
+        if ($status === PHP_SESSION_ACTIVE) {
             return;
         }
-        if (session_status() === PHP_SESSION_NONE) {
+        if ($status === PHP_SESSION_NONE) {
             if (!headers_sent()) {
                 session_start();
                 return;
@@ -952,10 +958,26 @@ class Cidaas
         return array_merge($queryParameters, $requiredParams);
     }
 
+    /**
+     * Normalize and validate MFA types for initiateMFA / authenticateMFA.
+     */
     private function assertMfaType(string $type): string
     {
-        $normalizedType = strtolower($type);
-        $allowedTypes = ['email', 'sms'];
+        $normalizedType = strtolower(trim($type));
+        $allowedTypes = [
+            'email',
+            'sms',
+            'ivr',
+            'backupcode',
+            'security_question',
+            'totp',
+            'pattern',
+            'push',
+            'face',
+            'touchid',
+            'fido2',
+            'password',
+        ];
         if (!in_array($normalizedType, $allowedTypes, true)) {
             throw new \InvalidArgumentException('invalid mfa type');
         }

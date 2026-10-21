@@ -11,7 +11,7 @@
 * Prevent caller `queryParameters` from overriding required OAuth params (`client_id`, `redirect_uri`, etc.).
 * Harden PKCE: safe `session_start`, dedicated session keys, require verifier in `getAccessToken`, clear after use; PKCE also available on `registerWithBrowser`.
 * Use cryptographically secure nonces instead of `time()`.
-* URL-encode path segments for profile/social redirects; validate MFA type on initiate.
+* URL-encode path segments for profile/social redirects; validate MFA types against the documented allowlist (EMAIL, SMS, TOTP, PUSH, …) for initiate and authenticate.
 * Send logout `access_token_hint` in the POST body instead of the query string.
 
 ### Bug Fixes

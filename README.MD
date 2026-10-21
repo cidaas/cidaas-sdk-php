@@ -221,10 +221,7 @@ To initiate multi factor authentication use the function `initiateMFA`. The miss
     PUSH
     FACE
     TOUCHID
-    VOICE
-    FIDOU2F
     FIDO2
-    SEALONE
     PASSWORD
 ```
 
