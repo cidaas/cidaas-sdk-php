@@ -9,6 +9,10 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
 use function PHPUnit\Framework\assertStringContainsString;
 use function PHPUnit\Framework\assertStringNotContainsString;
+use function PHPUnit\Framework\assertArrayNotHasKey;
+use function PHPUnit\Framework\assertEquals;
+use function PHPUnit\Framework\assertNotEmpty;
+use function PHPUnit\Framework\assertNotEquals;
 
 final class LoginWithBrowserTest extends AbstractCidaasTestParent {
     private static $LOGIN_URL = 'http://localhost:1111';
@@ -78,6 +82,64 @@ final class LoginWithBrowserTest extends AbstractCidaasTestParent {
         assertStringContainsString('response_type=code', $location);
         assertStringNotContainsString('attacker-client', $location);
         assertStringNotContainsString('evil.example', $location);
+    }
+
+    public function test_loginWithBrowser_doesNotAllowQueryParametersToOverrideStateOrPkce(): void
+    {
+        $this->provider->loginWithBrowser('openid', [
+            'state' => 'attacker-state',
+            'code_challenge' => 'attacker-challenge',
+            'code_challenge_method' => 'plain',
+        ], true);
+
+        parse_str(parse_url(substr(parent::$headers[0], strlen('Location: ')), PHP_URL_QUERY), $query);
+        assertEquals($_SESSION['cidaas_oauth_state'], $query['state']);
+        assertEquals('S256', $query['code_challenge_method']);
+        assertNotEquals('attacker-challenge', $query['code_challenge']);
+    }
+
+    public function test_loginWithBrowser_allowsQueryParametersToOverrideNonceAndViewType(): void
+    {
+        $this->provider->loginWithBrowser('openid', [
+            'nonce' => 'caller-nonce',
+            'view_type' => 'register',
+        ]);
+
+        parse_str(parse_url(substr(parent::$headers[0], strlen('Location: ')), PHP_URL_QUERY), $query);
+        assertEquals('caller-nonce', $query['nonce']);
+        assertEquals('register', $query['view_type']);
+    }
+
+    public function test_loginWithBrowser_withPkce_storesVerifierMatchingS256Challenge(): void
+    {
+        $this->provider->loginWithBrowser('openid', [], true);
+
+        parse_str(parse_url(substr(parent::$headers[0], strlen('Location: ')), PHP_URL_QUERY), $query);
+        $verifier = $_SESSION['cidaas_code_verifier'];
+        assertEquals(128, strlen($verifier));
+        assertEquals('S256', $query['code_challenge_method']);
+        assertEquals(rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '='), $query['code_challenge']);
+    }
+
+    public function test_loginWithBrowser_withoutPkce_clearsStaleVerifier(): void
+    {
+        $_SESSION['cidaas_code_verifier'] = 'stale-verifier';
+
+        $this->provider->loginWithBrowser();
+
+        assertArrayNotHasKey('cidaas_code_verifier', $_SESSION);
+        assertStringNotContainsString('code_challenge', parent::$headers[0]);
+    }
+
+    public function test_registerWithBrowser_withPkce_addsS256Challenge(): void
+    {
+        $this->provider->registerWithBrowser('openid', [], true);
+
+        $location = parent::$headers[0];
+        assertStringContainsString('view_type=register', $location);
+        assertStringContainsString('code_challenge=', $location);
+        assertStringContainsString('code_challenge_method=S256', $location);
+        assertNotEmpty($_SESSION['cidaas_code_verifier']);
     }
 
     public function test_registerWithBrowser_encodesRedirectUriAndQueryParameters(): void

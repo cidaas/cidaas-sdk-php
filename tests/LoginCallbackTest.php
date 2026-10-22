@@ -86,6 +86,50 @@ final class LoginCallbackTest extends TestCase {
         }
     }
 
+    public function test_loginCallback_withSessionStateButNoStateParameter_throws(): void
+    {
+        $_SESSION['cidaas_oauth_state'] = 'expected-state';
+        $_GET = ['code' => 'auth-code'];
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Invalid or missing OAuth state');
+        $this->provider->loginCallback();
+    }
+
+    public function test_loginCallback_withCodeButNoSessionState_throws(): void
+    {
+        // Login CSRF: victim never started a login, attacker injects their own code.
+        $_GET = ['code' => 'attacker-code'];
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('No OAuth state stored in session');
+        try {
+            $this->provider->loginCallback();
+        } finally {
+            $this->assertNoHttpPerformed();
+        }
+    }
+
+    public function test_loginCallback_withCodeButNoSessionStateAndStateNotRequired_returnsParameters(): void
+    {
+        $_GET = ['code' => 'auth-code'];
+
+        $parameters = $this->provider->loginCallback(false);
+
+        assertEquals('auth-code', $parameters['code']);
+        $this->assertNoHttpPerformed();
+    }
+
+    public function test_loginCallback_withStateConsumed_rejectsReplay(): void
+    {
+        $_SESSION['cidaas_oauth_state'] = 'expected-state';
+        $_GET = ['code' => 'auth-code', 'state' => 'expected-state'];
+        $this->provider->loginCallback();
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->provider->loginCallback();
+    }
+
     private function assertNoHttpPerformed(): void
     {
         assertNull($this->mock->getLastRequest());

@@ -17,6 +17,15 @@ class Cidaas
 {
     private const SESSION_OAUTH_STATE = 'cidaas_oauth_state';
     private const SESSION_CODE_VERIFIER = 'cidaas_code_verifier';
+    /** Authorization request params that caller-supplied query parameters must not override. */
+    private const LOCKED_AUTH_PARAMS = [
+        'client_id',
+        'redirect_uri',
+        'response_type',
+        'state',
+        'code_challenge',
+        'code_challenge_method',
+    ];
 
     private static string $well_known_uri = "/.well-known/openid-configuration";
     private static string $requestIdUri = '/authz-srv/authrequest/authz/generate';
@@ -215,7 +224,7 @@ class Cidaas
     /**
      * Performs a redirect to the hosted login page.
      * @param string $scope for login
-     * @param array $queryParameters (optional) additional query parameters; cannot override required OAuth params
+     * @param array $queryParameters (optional) additional query parameters; cannot override client_id, redirect_uri, response_type, state or PKCE params
      * @param bool $pkceEnabled enable PKCE (S256); stores code_verifier in the PHP session
      */
     public function loginWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array(), bool $pkceEnabled = false)
@@ -233,6 +242,8 @@ class Cidaas
 
         if ($pkceEnabled) {
             $params = array_merge($params, $this->createAndStorePkceParams());
+        } else {
+            unset($_SESSION[self::SESSION_CODE_VERIFIER]);
         }
 
         $params = $this->mergeAuthQueryParams($params, $queryParameters);
@@ -243,7 +254,7 @@ class Cidaas
     /**
      * Performs a redirect to the hosted registration page.
      * @param string $scope for registration
-     * @param array $queryParameters (optional) additional query parameters; cannot override required OAuth params
+     * @param array $queryParameters (optional) additional query parameters; cannot override client_id, redirect_uri, response_type, state or PKCE params
      * @param bool $pkceEnabled enable PKCE (S256); stores code_verifier in the PHP session
      */
     public function registerWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array(), bool $pkceEnabled = false)
@@ -261,6 +272,8 @@ class Cidaas
 
         if ($pkceEnabled) {
             $params = array_merge($params, $this->createAndStorePkceParams());
+        } else {
+            unset($_SESSION[self::SESSION_CODE_VERIFIER]);
         }
 
         $params = $this->mergeAuthQueryParams($params, $queryParameters);
@@ -269,12 +282,18 @@ class Cidaas
     }
 
     /**
-     * Returns query parameters from the callback request. When a browser login/register
-     * was started via this SDK, validates the OAuth `state` parameter against the session.
+     * Returns query parameters from the callback request and validates the OAuth `state`
+     * parameter against the value stored by loginWithBrowser / registerWithBrowser.
+     *
+     * A callback carrying a `code` without a stored state is rejected (login CSRF protection).
+     * Pass $requireState = false only if the authorization request was built outside this SDK.
+     * Error callbacks (`error`, `error_description`) are returned as-is for the caller to handle.
+     *
+     * @param bool $requireState reject a `code` callback when no state was stored in the session
      * @return array with $_GET
      * @throws UnexpectedValueException if state is missing or does not match
      */
-    public function loginCallback(): array
+    public function loginCallback(bool $requireState = true): array
     {
         $this->ensureSession();
         $params = $_GET;
@@ -285,6 +304,8 @@ class Cidaas
             if (!isset($params['state']) || !hash_equals($expectedState, (string)$params['state'])) {
                 throw new UnexpectedValueException('Invalid or missing OAuth state');
             }
+        } else if ($requireState && isset($params['code'])) {
+            throw new UnexpectedValueException('No OAuth state stored in session; start the flow with loginWithBrowser/registerWithBrowser');
         }
 
         return $params;
@@ -349,13 +370,11 @@ class Cidaas
             ];
             $this->appendClientSecretIfPresent($params);
 
-            if ($pkceEnabled) {
-                $this->ensureSession();
-                if (empty($_SESSION[self::SESSION_CODE_VERIFIER])) {
-                    throw new \InvalidArgumentException('PKCE code_verifier missing from session; call loginWithBrowser/registerWithBrowser with pkceEnabled first');
-                }
-                $params['code_verifier'] = $_SESSION[self::SESSION_CODE_VERIFIER];
-                unset($_SESSION[self::SESSION_CODE_VERIFIER]);
+            // A verifier stored by loginWithBrowser/registerWithBrowser is always sent;
+            // $pkceEnabled additionally makes it mandatory.
+            $codeVerifier = $this->consumeCodeVerifier($pkceEnabled);
+            if ($codeVerifier !== null) {
+                $params['code_verifier'] = $codeVerifier;
             }
         } else if ($grantType === GrantType::RefreshToken) {
             if (empty($refreshToken)) {
@@ -594,16 +613,18 @@ class Cidaas
     {
         $client = $this->createClient();
         $url = $this->openid_config["end_session_endpoint"];
-        $formParams = [
+        $params = [
             'access_token_hint' => $accessToken,
         ];
         if (!empty($postLogoutUri)) {
-            $formParams['post_logout_redirect_uri'] = $postLogoutUri;
+            $params['post_logout_redirect_uri'] = $postLogoutUri;
         }
 
         // Send token in the POST body to avoid leaking it via URL/query logs and Referer headers.
+        // JSON, not form-encoded: end_session binds the body via json tags only.
         return $client->requestAsync('POST', $url, [
-            RequestOptions::FORM_PARAMS => $formParams,
+            RequestOptions::BODY => $this->encodeJson($params),
+            RequestOptions::HEADERS => ['Content-Type' => 'application/json'],
             'allow_redirects' => false,
         ]);
     }
@@ -896,23 +917,27 @@ class Cidaas
         });
     }
 
+    /**
+     * Starts the PHP session that holds OAuth state and PKCE verifier between redirect and callback.
+     *
+     * @throws \LogicException in web requests where no session can be started; an in-memory
+     *                         fallback there would silently drop state/verifier after the redirect
+     */
     private function ensureSession(): void
     {
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
-        if (session_status() === PHP_SESSION_DISABLED) {
-            if (!isset($_SESSION) || !is_array($_SESSION)) {
-                $_SESSION = [];
-            }
-            return;
-        }
-        // PHP_SESSION_NONE
-        if (!headers_sent()) {
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             session_start();
             return;
         }
-        // Headers already sent (e.g. CLI/PHPUnit): keep an in-memory $_SESSION for this request.
+        if (PHP_SAPI !== 'cli') {
+            throw new \LogicException(session_status() === PHP_SESSION_DISABLED
+                ? 'PHP sessions are disabled; they are required to store OAuth state and PKCE verifier'
+                : 'Cannot start PHP session because headers were already sent; call the SDK before any output');
+        }
+        // CLI (e.g. PHPUnit): keep an in-memory $_SESSION for this process.
         if (!isset($_SESSION) || !is_array($_SESSION)) {
             $_SESSION = [];
         }
@@ -947,15 +972,40 @@ class Cidaas
     }
 
     /**
-     * Required OAuth params always win over caller-supplied query parameters.
+     * Returns the stored PKCE code_verifier and removes it from the session.
      *
-     * @param array<string, mixed> $requiredParams
+     * @param bool $required throw if no verifier is stored
+     * @throws \InvalidArgumentException if $required and no verifier is stored
+     */
+    private function consumeCodeVerifier(bool $required): ?string
+    {
+        if ($required) {
+            $this->ensureSession();
+        }
+        $codeVerifier = $_SESSION[self::SESSION_CODE_VERIFIER] ?? null;
+        if (empty($codeVerifier)) {
+            if ($required) {
+                throw new \InvalidArgumentException('PKCE code_verifier missing from session; call loginWithBrowser/registerWithBrowser with pkceEnabled first');
+            }
+            return null;
+        }
+        unset($_SESSION[self::SESSION_CODE_VERIFIER]);
+        return (string)$codeVerifier;
+    }
+
+    /**
+     * Merges caller query parameters into the authorization request. Protocol-critical params
+     * (LOCKED_AUTH_PARAMS) always keep the SDK value; others such as nonce, scope or view_type
+     * may be overridden by the caller.
+     *
+     * @param array<string, mixed> $sdkParams
      * @param array<string, mixed> $queryParameters
      * @return array<string, mixed>
      */
-    private function mergeAuthQueryParams(array $requiredParams, array $queryParameters): array
+    private function mergeAuthQueryParams(array $sdkParams, array $queryParameters): array
     {
-        return array_merge($queryParameters, $requiredParams);
+        $locked = array_intersect_key($sdkParams, array_flip(self::LOCKED_AUTH_PARAMS));
+        return array_merge($sdkParams, $queryParameters, $locked);
     }
 
     /**

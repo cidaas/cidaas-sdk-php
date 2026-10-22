@@ -7,13 +7,13 @@
 ### Security
 
 * Remove real client secrets and passwords from committed `tests/testconfig.env` (placeholders only).
-* Add OAuth `state` to `loginWithBrowser` / `registerWithBrowser` and validate it in `loginCallback` when a flow was started by the SDK.
-* Prevent caller `queryParameters` from overriding required OAuth params (`client_id`, `redirect_uri`, etc.).
-* Harden PKCE: safe `session_start`, dedicated session keys, require verifier in `getAccessToken`, clear after use; PKCE also available on `registerWithBrowser`.
+* Add OAuth `state` to `loginWithBrowser` / `registerWithBrowser` and validate it in `loginCallback`. A callback with a `code` but no stored state is rejected (login CSRF); `loginCallback(false)` opts out for externally built authorization URLs.
+* Prevent caller `queryParameters` from overriding `client_id`, `redirect_uri`, `response_type`, `state` and PKCE params; `nonce`, `scope` and `view_type` stay overridable.
+* Harden PKCE: dedicated session keys, verifier sent automatically when stored (mandatory with `$pkceEnabled`), cleared after use and on non-PKCE logins; PKCE also available on `registerWithBrowser`.
 * Use cryptographically secure nonces instead of `time()`.
 * URL-encode path segments for profile/social redirects; keep initiateMFA type-unrestricted (legacy behaviour), validate authenticateMFA types against the documented allowlist.
-* ensureSession falls back to an in-memory `$_SESSION` when PHP sessions are disabled or headers were already sent.
-* Send logout `access_token_hint` in the POST body instead of the query string.
+* Throw `LogicException` in web requests when the PHP session cannot be started instead of silently losing state/verifier (in-memory fallback only on CLI).
+* Send logout `access_token_hint` as a JSON POST body instead of the query string.
 
 ### Bug Fixes
 

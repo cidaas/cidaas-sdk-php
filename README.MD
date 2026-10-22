@@ -87,12 +87,30 @@ In order to integrate a hosted login page, you might just implement a simple but
     $provider->loginWithBrowser();
 ?>
 ```
-After successful login, the browser is redirected to your selected redirectUri (see Prerequisites). Using the method `loginCallback` enables you to retrieve the authorization code for retrieving access and refresh tokens. When the login was started with `loginWithBrowser` / `registerWithBrowser`, the SDK stores an OAuth `state` value in the PHP session and `loginCallback` validates it (throws if missing or mismatched).
+After successful login, the browser is redirected to your selected redirectUri (see Prerequisites). Using the method `loginCallback` enables you to retrieve the authorization code for retrieving access and refresh tokens.
+
+`loginWithBrowser` / `registerWithBrowser` store an OAuth `state` value (and, with PKCE, the `code_verifier`) in the native PHP session, and `loginCallback` validates the state:
+
+* `UnexpectedValueException` if the state is missing or does not match.
+* `UnexpectedValueException` if the callback carries a `code` but no state was stored (login CSRF protection). If you build the authorization URL yourself, call `loginCallback(false)` and validate `state` on your side.
+* Error callbacks (`error`, `error_description`) are returned unchanged, so check for `error` before using `code`.
+
+`getAccessToken` sends the stored `code_verifier` automatically; pass `$pkceEnabled = true` to make it mandatory.
+
+Notes:
+* Call the SDK before sending any output. In web requests the SDK throws `LogicException` if the session cannot be started (sessions disabled or headers already sent).
+* The SDK uses native PHP sessions (`PHPSESSID`). In frameworks with their own session handling (Laravel, Symfony), this is a separate session cookie.
+* One login flow can be pending per session. Starting a second login (e.g. in another tab) replaces the first one's state.
+* `queryParameters` cannot override `client_id`, `redirect_uri`, `response_type`, `state` or the PKCE parameters. Other values such as `nonce` or `view_type` can be overridden.
+
 ```php
 <?php
 $parameters = $provider->loginCallback();
-if (array_key_exists('code', $parameters)) {
-    $loginResultCode = $parameters['code'];     
+if (array_key_exists('error', $parameters)) {
+    // handle $parameters['error'] / $parameters['error_description']
+} elseif (array_key_exists('code', $parameters)) {
+    $loginResultCode = $parameters['code'];
+    $tokens = $provider->getAccessToken(GrantType::AuthorizationCode, $loginResultCode)->wait();
 }
 ?>
 ```
@@ -158,7 +176,7 @@ In order to get a new access token by a given refresh token, you can also use th
 
 
 ### Logout
-In order to perform a logout, you need an access token. Using this token, you can perform a logout.
+In order to perform a logout, you need an access token. Using this token, you can perform a logout. The token is sent as `access_token_hint` in a JSON POST body, never in the URL.
 ```php
 <?php
     $provider->logout($accessToken);
@@ -224,6 +242,7 @@ To initiate multi factor authentication use the function `initiateMFA`. The miss
     FIDO2
     PASSWORD
 ```
+Legacy types such as `VOICE`, `FIDOU2F` and `SEALONE` are still forwarded by `initiateMFA`, but `authenticateMFA` only accepts the types listed above.
 
 ```php
 <?php
