@@ -17,6 +17,8 @@ codecoverage:
     - docker-php-ext-enable xdebug
     - curl -sS https://getcomposer.org/installer | php
     - php composer.phar install
+    # Composer >= 2.9 blocks insecure packages on install; audit makes advisories visible in the job log.
+    - php composer.phar audit
   script:
     - XDEBUG_MODE=coverage php vendor/bin/phpunit --coverage-text | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[mGK]//g" > coverage_report.txt
   coverage: '/Lines:\s+(\d+.\d+)%/'
