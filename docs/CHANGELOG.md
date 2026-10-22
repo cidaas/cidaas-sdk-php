@@ -18,6 +18,8 @@
 ### Bug Fixes
 
 * Guard missing `requestId` in auth request responses and failed `json_encode` bodies.
+* Throw `UnexpectedValueException` instead of a `TypeError` when an API response is valid JSON but not an object/array (e.g. `null`).
+* `getAccessToken` resumes an existing PHP session to find a stored `code_verifier` even when `loginCallback` was not called first.
 * Default unit-test debug mode to `false`.
 
 ## [2.0.1](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/compare/v2.0.0...v2.0.1) (2026-06-19)

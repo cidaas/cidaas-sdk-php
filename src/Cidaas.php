@@ -869,6 +869,9 @@ class Cidaas
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new UnexpectedValueException(sprintf("Failed to parse JSON response: %s", json_last_error_msg()));
         }
+        if (!is_array($content)) {
+            throw new UnexpectedValueException(sprintf("Expected JSON object or array in response, got %s", gettype($content)));
+        }
 
         return $content;
     }
@@ -981,6 +984,9 @@ class Cidaas
     {
         if ($required) {
             $this->ensureSession();
+        } elseif (session_status() === PHP_SESSION_NONE && !headers_sent() && isset($_COOKIE[session_name()])) {
+            // Resume an existing session so a stored verifier is found, without failing when none is possible.
+            session_start();
         }
         $codeVerifier = $_SESSION[self::SESSION_CODE_VERIFIER] ?? null;
         if (empty($codeVerifier)) {

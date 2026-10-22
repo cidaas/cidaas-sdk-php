@@ -95,7 +95,7 @@ After successful login, the browser is redirected to your selected redirectUri (
 * `UnexpectedValueException` if the callback carries a `code` but no state was stored (login CSRF protection). If you build the authorization URL yourself, call `loginCallback(false)` and validate `state` on your side.
 * Error callbacks (`error`, `error_description`) are returned unchanged, so check for `error` before using `code`.
 
-`getAccessToken` sends the stored `code_verifier` automatically; pass `$pkceEnabled = true` to make it mandatory.
+`getAccessToken` sends the stored `code_verifier` automatically (resuming the PHP session if the request carries its cookie); pass `$pkceEnabled = true` to make it mandatory.
 
 Notes:
 * Call the SDK before sending any output. In web requests the SDK throws `LogicException` if the session cannot be started (sessions disabled or headers already sent).

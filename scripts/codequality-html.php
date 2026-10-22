@@ -11,6 +11,10 @@ if ($argc < 2 || !is_readable($argv[1])) {
 }
 
 $issues = json_decode((string)file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+if (!is_array($issues)) {
+    fwrite(STDERR, "error: expected a JSON array, got " . gettype($issues) . "\n");
+    exit(2);
+}
 $e = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES);
 
 $rows = '';

@@ -73,6 +73,26 @@ final class PkceTokenExchangeTest extends TestCase {
         assertArrayNotHasKey('code_verifier', $this->lastRequestBody());
     }
 
+    /**
+     * @runInSeparateProcess
+     */
+    public function test_getAccessToken_withPkceFlagOmitted_resumesExistingSessionToFindVerifier(): void {
+        session_save_path(sys_get_temp_dir());
+        session_start();
+        $_SESSION['cidaas_code_verifier'] = 'stored-verifier';
+        $sessionId = session_id();
+        session_write_close();
+        $_SESSION = [];
+        $_COOKIE[session_name()] = $sessionId;
+        $this->mock->append(new Response(200, [], self::TOKEN_RESPONSE));
+
+        $this->createProvider('')->getAccessToken(GrantType::AuthorizationCode, 'code')->wait();
+
+        assertEquals('stored-verifier', $this->lastRequestBody()['code_verifier']);
+        assertArrayNotHasKey('cidaas_code_verifier', $_SESSION);
+        session_destroy();
+    }
+
     public function test_getAccessToken_withPkceEnabledAndNoStoredVerifier_throws(): void {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('PKCE code_verifier missing from session');
@@ -102,6 +122,15 @@ final class PkceTokenExchangeTest extends TestCase {
         $body = $this->lastRequestBody();
         assertArrayHasKey('client_secret', $body);
         assertEquals('secret', $body['client_secret']);
+    }
+
+    public function test_getAccessToken_nonArrayJsonResponse_throwsUnexpectedValue(): void {
+        $this->mock->append(new Response(200, [], 'null'));
+
+        $this->expectException(\UnexpectedValueException::class);
+        $this->expectExceptionMessage('Expected JSON object or array in response, got NULL');
+
+        $this->createProvider('secret')->getAccessToken(GrantType::AuthorizationCode, 'code')->wait();
     }
 
     public function test_getAccessToken_clientCredentialsWithoutSecret_throws(): void {
