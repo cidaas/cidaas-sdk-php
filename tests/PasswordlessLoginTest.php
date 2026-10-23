@@ -3,7 +3,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/AbstractCidaasTestParent.php';
 
 use Cidaas\OAuth2\Client\Provider\AbstractCidaasTestParent;
-use InvalidArgumentException;
 use function PHPUnit\Framework\assertEquals;
 use function PHPUnit\Framework\assertStringContainsString;
 
@@ -26,7 +25,7 @@ final class PasswordlessLoginTest extends AbstractCidaasTestParent
 
     public function test_initiatePasswordlessLogin_rejectsInvalidType(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('invalid type');
 
         $this->provider->initiatePasswordlessLogin(self::$REQUEST_ID, 'unknown', 'user@example.com', 'x');

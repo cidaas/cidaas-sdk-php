@@ -6,7 +6,6 @@ use GuzzleHttp\Client;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Promise\PromiseInterface;
 use GuzzleHttp\RequestOptions;
-use LogicException;
 use Psr\Http\Message\ResponseInterface;
 use UnexpectedValueException;
 
@@ -16,6 +15,18 @@ use UnexpectedValueException;
  */
 class Cidaas
 {
+    private const SESSION_OAUTH_STATE = 'cidaas_oauth_state';
+    private const SESSION_CODE_VERIFIER = 'cidaas_code_verifier';
+    /** Authorization request params that caller-supplied query parameters must not override. */
+    private const LOCKED_AUTH_PARAMS = [
+        'client_id',
+        'redirect_uri',
+        'response_type',
+        'state',
+        'code_challenge',
+        'code_challenge_method',
+    ];
+
     private static string $well_known_uri = "/.well-known/openid-configuration";
     private static string $requestIdUri = '/authz-srv/authrequest/authz/generate';
     private static string $getRegistrationSetupUri = '/registration-setup-srv/public/list';
@@ -43,7 +54,7 @@ class Cidaas
      * Cidaas constructor.
      * @param string $baseUrl of cidaas server
      * @param string $clientId of cidaas application
-     * @param string $clientSecret of cidaas application
+     * @param string $clientSecret of cidaas application (optional for public/PKCE clients)
      * @param string $redirectUri to redirect to after login
      * @param HandlerStack|null $handler (optional) for http requests
      * @param bool $debug (optional) to enable debugging
@@ -52,7 +63,7 @@ class Cidaas
     {
         $this->validate($baseUrl, 'Base URL');
         $this->validate($clientId, 'Client-ID');
-        $this->validate($clientSecret, 'Client-Secret');
+        // Client secret is optional (public / PKCE clients). Pass '' when unused.
         $this->validate($redirectUri, 'Redirect URL');
 
         $this->baseUrl = rtrim($baseUrl, "/");
@@ -96,9 +107,9 @@ class Cidaas
             'redirect_uri' => $this->redirectUri,
             "response_type" => $responseType,
             "scope" => $scope,
-            "nonce" => (string)time()
+            "nonce" => $this->createSecureNonce()
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -112,6 +123,9 @@ class Cidaas
         return $responsePromise->then(function (ResponseInterface $response) {
             $body = $response->getBody();
             $parsedBody = $this->parseJson($body);
+            if (!isset($parsedBody['data']['requestId'])) {
+                throw new UnexpectedValueException('Missing requestId in auth request response');
+            }
             return $parsedBody['data']['requestId'];
         });
     }
@@ -157,7 +171,7 @@ class Cidaas
         if (!isset($registrationFields['provider'])) {
             $registrationFields['provider'] = 'self';
         }
-        $postBody = json_encode($registrationFields, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($registrationFields);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -192,7 +206,7 @@ class Cidaas
             'username_type' => $username_type,
             'requestId' => $requestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -210,8 +224,8 @@ class Cidaas
     /**
      * Performs a redirect to the hosted login page.
      * @param string $scope for login
-     * @param array $queryParameters (optional) optionally adds more query parameters to the url.
-     * @throws LogicException if no loginUrl has been set
+     * @param array $queryParameters (optional) additional query parameters; cannot override client_id, redirect_uri, response_type, state or PKCE params
+     * @param bool $pkceEnabled enable PKCE (S256); stores code_verifier in the PHP session
      */
     public function loginWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array(), bool $pkceEnabled = false)
     {
@@ -221,52 +235,80 @@ class Cidaas
             'response_type' => 'code',
             'scope' => $scope,
             'redirect_uri' => $this->redirectUri,
-            'nonce' => time(),
+            'nonce' => $this->createSecureNonce(),
+            'state' => $this->createAndStoreOAuthState(),
             'view_type' => 'login',
         ];
 
         if ($pkceEnabled) {
-            session_start();
-            $code_verifier = bin2hex(random_bytes(64));
-            $_SESSION['code-verifier'] = $code_verifier;
-            $str = strtr(base64_encode(hash('sha256', $code_verifier, true)), '+/', '-_');
-            $code_challenge = rtrim($str, '=');
-            $params['code_challenge'] = $code_challenge;
-            $params['code_challenge_method'] = 'S256';
+            $params = array_merge($params, $this->createAndStorePkceParams());
+        } else {
+            unset($_SESSION[self::SESSION_CODE_VERIFIER]);
         }
 
-        $params = array_merge($params, $queryParameters);
+        $params = $this->mergeAuthQueryParams($params, $queryParameters);
         $loginUrl = $this->openid_config['authorization_endpoint'] . '?' . http_build_query($params);
         header('Location: ' . $loginUrl);
     }
+
     /**
      * Performs a redirect to the hosted registration page.
      * @param string $scope for registration
-     * @param array $queryParameters (optional) optionally adds more query parameters to the url.
+     * @param array $queryParameters (optional) additional query parameters; cannot override client_id, redirect_uri, response_type, state or PKCE params
+     * @param bool $pkceEnabled enable PKCE (S256); stores code_verifier in the PHP session
      */
-    public function registerWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array())
+    public function registerWithBrowser(string $scope = 'openid profile offline_access', array $queryParameters = array(), bool $pkceEnabled = false)
     {
-        $this->initClient();
+        $this->createClient();
         $params = [
             'client_id' => $this->clientId,
             'response_type' => 'code',
             'scope' => $scope,
             'redirect_uri' => $this->redirectUri,
-            'nonce' => time(),
+            'nonce' => $this->createSecureNonce(),
+            'state' => $this->createAndStoreOAuthState(),
             'view_type' => 'register',
         ];
-        $params = array_merge($params, $queryParameters);
+
+        if ($pkceEnabled) {
+            $params = array_merge($params, $this->createAndStorePkceParams());
+        } else {
+            unset($_SESSION[self::SESSION_CODE_VERIFIER]);
+        }
+
+        $params = $this->mergeAuthQueryParams($params, $queryParameters);
         $registerUrl = $this->openid_config['authorization_endpoint'] . '?' . http_build_query($params);
         header('Location: ' . $registerUrl);
     }
 
     /**
-     * Returns all query parameters from get request. The result should contain 'code' to be used for retrieving access token.
+     * Returns query parameters from the callback request and validates the OAuth `state`
+     * parameter against the value stored by loginWithBrowser / registerWithBrowser.
+     *
+     * A callback carrying a `code` without a stored state is rejected (login CSRF protection).
+     * Pass $requireState = false only if the authorization request was built outside this SDK.
+     * Error callbacks (`error`, `error_description`) are returned as-is for the caller to handle.
+     *
+     * @param bool $requireState reject a `code` callback when no state was stored in the session
      * @return array with $_GET
+     * @throws UnexpectedValueException if state is missing or does not match
      */
-    public function loginCallback(): array
+    public function loginCallback(bool $requireState = true): array
     {
-        return $_GET;
+        $this->ensureSession();
+        $params = $_GET;
+
+        if (isset($_SESSION[self::SESSION_OAUTH_STATE])) {
+            $expectedState = (string)$_SESSION[self::SESSION_OAUTH_STATE];
+            unset($_SESSION[self::SESSION_OAUTH_STATE]);
+            if (!isset($params['state']) || !hash_equals($expectedState, (string)$params['state'])) {
+                throw new UnexpectedValueException('Invalid or missing OAuth state');
+            }
+        } else if ($requireState && isset($params['code'])) {
+            throw new UnexpectedValueException('No OAuth state stored in session; start the flow with loginWithBrowser/registerWithBrowser');
+        }
+
+        return $params;
     }
 
     /**
@@ -289,7 +331,7 @@ class Cidaas
             'confirm_password' => $confirmPassword,
             'identityId' => $identityId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -322,14 +364,17 @@ class Cidaas
 
             $params = [
                 'client_id' => $this->clientId,
-                'client_secret' => $this->clientSecret,
                 'redirect_uri' => $this->redirectUri,
                 'grant_type' => 'authorization_code',
                 'code' => $code,
             ];
+            $this->appendClientSecretIfPresent($params);
 
-            if ($pkceEnabled) {
-                $params["code_verifier"] = $_SESSION['code-verifier'];
+            // A verifier stored by loginWithBrowser/registerWithBrowser is always sent;
+            // $pkceEnabled additionally makes it mandatory.
+            $codeVerifier = $this->consumeCodeVerifier($pkceEnabled);
+            if ($codeVerifier !== null) {
+                $params['code_verifier'] = $codeVerifier;
             }
         } else if ($grantType === GrantType::RefreshToken) {
             if (empty($refreshToken)) {
@@ -337,11 +382,14 @@ class Cidaas
             }
             $params = [
                 'client_id' => $this->clientId,
-                'client_secret' => $this->clientSecret,
                 'grant_type' => 'refresh_token',
                 'refresh_token' => $refreshToken,
             ];
+            $this->appendClientSecretIfPresent($params);
         } else if ($grantType === GrantType::ClientCredentials) {
+            if ($this->clientSecret === '') {
+                throw new \InvalidArgumentException('client secret is required for client_credentials flow');
+            }
             $params = [
                 'client_id' => $this->clientId,
                 'client_secret' => $this->clientSecret,
@@ -371,7 +419,7 @@ class Cidaas
         $client = $this->createClient();
         $url = $this->openid_config["userinfo_endpoint"];
         if (!empty($sub)) {
-            $url .= "/" . $sub;
+            $url .= "/" . rawurlencode($sub);
         }
 
         $responsePromise = $client->requestAsync('POST', $url, [
@@ -403,7 +451,7 @@ class Cidaas
             'resetMedium' => 'email',
             'requestId' => $requestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -438,7 +486,7 @@ class Cidaas
             'code' => $code,
             'resetRequestId' => $resetRequestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -474,7 +522,7 @@ class Cidaas
             'exchangeId' => $exchangeId,
             'resetRequestId' => $resetRequestId
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -501,7 +549,7 @@ class Cidaas
         $client = $this->createClient();
 
         $fields['provider'] = $provider;
-        $postBody = json_encode($fields, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($fields);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => [
@@ -509,7 +557,7 @@ class Cidaas
                 'Authorization' => 'Bearer ' . $accessToken
             ]
         ];
-        $url = $this->baseUrl . self::$updateProfileUriPrefix . $sub;
+        $url = $this->baseUrl . self::$updateProfileUriPrefix . rawurlencode($sub);
 
         $responsePromise = $client->requestAsync('PUT', $url, $options);
         return $responsePromise->then(function (ResponseInterface $response) {
@@ -532,9 +580,12 @@ class Cidaas
             'token_type_hint' => 'access_token',
             'token' => $accessTokenToValidate
         ];
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $headers = ['Content-Type' => 'application/json'];
         if (empty($accessTokenForApiAccess)) {
+            if ($this->clientSecret === '') {
+                throw new \InvalidArgumentException('client secret or accessTokenForApiAccess is required to introspect tokens');
+            }
             $headers['Authorization'] = 'Basic ' . base64_encode($this->clientId . ":" . $this->clientSecret);
         } else {
             $headers['Authorization'] = 'Bearer ' . $accessTokenForApiAccess;
@@ -561,12 +612,21 @@ class Cidaas
     public function logout(string $accessToken, string $postLogoutUri = ""): PromiseInterface
     {
         $client = $this->createClient();
-        $url = $this->openid_config["end_session_endpoint"] . "?access_token_hint=" . $accessToken;
+        $url = $this->openid_config["end_session_endpoint"];
+        $params = [
+            'access_token_hint' => $accessToken,
+        ];
         if (!empty($postLogoutUri)) {
-            $url .= "&post_logout_redirect_uri=" . urlencode($postLogoutUri);
+            $params['post_logout_redirect_uri'] = $postLogoutUri;
         }
 
-        return $client->requestAsync('POST', $url, ['allow_redirects' => false]);
+        // Send token in the POST body to avoid leaking it via URL/query logs and Referer headers.
+        // JSON, not form-encoded: end_session binds the body via json tags only.
+        return $client->requestAsync('POST', $url, [
+            RequestOptions::BODY => $this->encodeJson($params),
+            RequestOptions::HEADERS => ['Content-Type' => 'application/json'],
+            'allow_redirects' => false,
+        ]);
     }
 
     /**
@@ -577,7 +637,9 @@ class Cidaas
      */
     public function loginWithSocial(string $provider_name, string $request_id, array $queryParameters = array())
     {
-        $url = $this->baseUrl . "/login-srv/social/login/" . strtolower($provider_name) . "/" . $request_id;
+        $url = $this->baseUrl . "/login-srv/social/login/"
+            . rawurlencode(strtolower($provider_name)) . "/"
+            . rawurlencode($request_id);
         if ($queryParameters !== []) {
             $url .= '?' . http_build_query($queryParameters);
         }
@@ -592,7 +654,9 @@ class Cidaas
      */
     public function registerWithSocial($provider_name, $request_id, array $queryParameters = array())
     {
-        $url = $this->baseUrl . "/login-srv/social/register/" . strtolower($provider_name) . "/" . $request_id;
+        $url = $this->baseUrl . "/login-srv/social/register/"
+            . rawurlencode(strtolower((string)$provider_name)) . "/"
+            . rawurlencode((string)$request_id);
         if ($queryParameters !== []) {
             $url .= '?' . http_build_query($queryParameters);
         }
@@ -600,13 +664,15 @@ class Cidaas
     }
 
     /**
-     * Initiates multi factore authentication
-     * @param string $type the type of multi factor. e.g: email, sms
+     * Initiates multi factor authentication.
+     * No type allowlist (any type string is accepted, matching previous SDK behaviour).
+     * @param string $type MFA type, e.g. email, sms, totp, push
      * @param array $params an associate array with the params that api accepts as request body
      */
     public function initiateMFA($type, $params)
     {
-        $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . strtolower($type);
+        $normalizedType = strtolower((string)$type);
+        $url = $this->baseUrl . "/verification-srv/v2/authenticate/initiate/" . rawurlencode($normalizedType);
         return $this->makeRequest($params, $url);
     }
 
@@ -619,23 +685,20 @@ class Cidaas
     }
 
     /**
-     * Validates multi factore authentication
+     * Validates multi factor authentication.
      * @param string $exchange_id the exchange_id received in the response body while initiating mfa
      * @param string $sub the sub received in the response body while initiating mfa
      * @param string $pass_code the verification code recieved to the prefered mfa type
-     * @param string $type the type of multi factor. e.g: email, sms
+     * @param string $type MFA type (validated against documented allowlist)
      */
     public function authenticateMFA(string $exchange_id, string $sub, string $pass_code, string $type)
     {
-        $url = $this->baseUrl . "/verification-srv/v2/authenticate/authenticate/" . strtolower($type);
-        $allowed_types = ["EMAIL", "SMS"];
-        if (!in_array(strtoupper($type), $allowed_types)) {
-            throw new \InvalidArgumentException('invalid mfa type');
-        }
+        $normalizedType = $this->assertMfaType($type);
+        $url = $this->baseUrl . "/verification-srv/v2/authenticate/authenticate/" . rawurlencode($normalizedType);
         $params = [
             'exchange_id' => $exchange_id,
             'sub' => $sub,
-            'type' => strtoupper($type),
+            'type' => strtoupper($normalizedType),
             'pass_code' => $pass_code
         ];
         return $this->makeRequest($params, $url);
@@ -806,8 +869,23 @@ class Cidaas
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new UnexpectedValueException(sprintf("Failed to parse JSON response: %s", json_last_error_msg()));
         }
+        if (!is_array($content)) {
+            throw new UnexpectedValueException(sprintf("Expected JSON object or array in response, got %s", gettype($content)));
+        }
 
         return $content;
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function encodeJson(array $data): string
+    {
+        $encoded = json_encode($data, JSON_UNESCAPED_SLASHES);
+        if ($encoded === false) {
+            throw new UnexpectedValueException(sprintf('Failed to encode JSON request body: %s', json_last_error_msg()));
+        }
+        return $encoded;
     }
 
     private function validate($param, $name)
@@ -830,7 +908,7 @@ class Cidaas
     private function makeRequest($params, $url, $headers = ['Content-Type' => 'application/json'])
     {
         $client = $this->createClient();
-        $postBody = json_encode($params, JSON_UNESCAPED_SLASHES);
+        $postBody = $this->encodeJson($params);
         $options = [
             RequestOptions::BODY => $postBody,
             RequestOptions::HEADERS => $headers
@@ -840,5 +918,135 @@ class Cidaas
             $body = $response->getBody();
             return $this->parseJson($body);
         });
+    }
+
+    /**
+     * Starts the PHP session that holds OAuth state and PKCE verifier between redirect and callback.
+     *
+     * @throws \LogicException in web requests where no session can be started; an in-memory
+     *                         fallback there would silently drop state/verifier after the redirect
+     */
+    private function ensureSession(): void
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            return;
+        }
+        if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
+            session_start();
+            return;
+        }
+        if (PHP_SAPI !== 'cli') {
+            throw new \LogicException(session_status() === PHP_SESSION_DISABLED
+                ? 'PHP sessions are disabled; they are required to store OAuth state and PKCE verifier'
+                : 'Cannot start PHP session because headers were already sent; call the SDK before any output');
+        }
+        // CLI (e.g. PHPUnit): keep an in-memory $_SESSION for this process.
+        if (!isset($_SESSION) || !is_array($_SESSION)) {
+            $_SESSION = [];
+        }
+    }
+
+    private function createSecureNonce(): string
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    private function createAndStoreOAuthState(): string
+    {
+        $this->ensureSession();
+        $state = bin2hex(random_bytes(16));
+        $_SESSION[self::SESSION_OAUTH_STATE] = $state;
+        return $state;
+    }
+
+    /**
+     * @return array{code_challenge: string, code_challenge_method: string}
+     */
+    private function createAndStorePkceParams(): array
+    {
+        $this->ensureSession();
+        $codeVerifier = bin2hex(random_bytes(64));
+        $_SESSION[self::SESSION_CODE_VERIFIER] = $codeVerifier;
+        $codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
+        return [
+            'code_challenge' => $codeChallenge,
+            'code_challenge_method' => 'S256',
+        ];
+    }
+
+    /**
+     * Returns the stored PKCE code_verifier and removes it from the session.
+     *
+     * @param bool $required throw if no verifier is stored
+     * @throws \InvalidArgumentException if $required and no verifier is stored
+     */
+    private function consumeCodeVerifier(bool $required): ?string
+    {
+        if ($required) {
+            $this->ensureSession();
+        } elseif (session_status() === PHP_SESSION_NONE && !headers_sent() && isset($_COOKIE[session_name()])) {
+            // Resume an existing session so a stored verifier is found, without failing when none is possible.
+            session_start();
+        }
+        $codeVerifier = $_SESSION[self::SESSION_CODE_VERIFIER] ?? null;
+        if (empty($codeVerifier)) {
+            if ($required) {
+                throw new \InvalidArgumentException('PKCE code_verifier missing from session; call loginWithBrowser/registerWithBrowser with pkceEnabled first');
+            }
+            return null;
+        }
+        unset($_SESSION[self::SESSION_CODE_VERIFIER]);
+        return (string)$codeVerifier;
+    }
+
+    /**
+     * Merges caller query parameters into the authorization request. Protocol-critical params
+     * (LOCKED_AUTH_PARAMS) always keep the SDK value; others such as nonce, scope or view_type
+     * may be overridden by the caller.
+     *
+     * @param array<string, mixed> $sdkParams
+     * @param array<string, mixed> $queryParameters
+     * @return array<string, mixed>
+     */
+    private function mergeAuthQueryParams(array $sdkParams, array $queryParameters): array
+    {
+        $locked = array_intersect_key($sdkParams, array_flip(self::LOCKED_AUTH_PARAMS));
+        return array_merge($sdkParams, $queryParameters, $locked);
+    }
+
+    /**
+     * Normalize and validate MFA types for authenticateMFA.
+     */
+    private function assertMfaType(string $type): string
+    {
+        $normalizedType = strtolower(trim($type));
+        $allowedTypes = [
+            'email',
+            'sms',
+            'ivr',
+            'backupcode',
+            'security_question',
+            'totp',
+            'pattern',
+            'push',
+            'face',
+            'touchid',
+            'fido2',
+            'password',
+        ];
+        if (!in_array($normalizedType, $allowedTypes, true)) {
+            throw new \InvalidArgumentException('invalid mfa type');
+        }
+        return $normalizedType;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function appendClientSecretIfPresent(array &$params): void
+    {
+        if ($this->clientSecret !== '') {
+            $params['client_secret'] = $this->clientSecret;
+        }
     }
 }
