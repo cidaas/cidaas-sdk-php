@@ -1,3 +1,14 @@
+## [2.0.2](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/compare/v2.0.1...v2.0.2) (2026-11-03)
+
+
+### Bug Fixes
+
+* address GitLab Duo review on MR !41 ([e13e784](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/e13e784328502bcb4baffb346a3cab1ff473ace8))
+* address GitLab Duo review on MR !42 ([5b0b2b3](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/5b0b2b31b54e6b243a09b8911acebbbf45e88b60))
+* harden state, PKCE, session and logout handling from MR !40 review ([ad0cf83](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/ad0cf835acf0f500d02ae23e7e0cd771ac13cfb2))
+* remove breakings, enhance readme ([3cb95d5](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/3cb95d55bd86ea7c0583de01836e54fa594d15e7))
+* update to PKCE and state check ([abe3865](https://gitlab.widas.de/cidaas-public-devkits/cidaas-public-sdks/cidaas-sdk-php/commit/abe3865c60f44d6a9bd1597df3b4abc975baa5a1))
+
 ## Unreleased
 
 ### Features
