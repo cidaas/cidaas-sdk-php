@@ -10,6 +10,7 @@ use function PHPUnit\Framework\assertStringContainsString;
 use function PHPUnit\Framework\assertStringNotContainsString;
 use function PHPUnit\Framework\assertEquals;
 use function PHPUnit\Framework\assertFalse;
+use function PHPUnit\Framework\assertArrayNotHasKey;
 
 final class LogoutTest extends AbstractCidaasTestParent {
     private static $getAccessTokenInvalidResponse = '{"success":false,"status":400,"error":{"code":24007,"moreInfo":"","type":"LoginException","status":400,"referenceNumber":"1603275867825-5044e54b-9cd3-4dbc-9e61-fa33235bed87","error":"invalid token passed"}}';
@@ -41,8 +42,11 @@ final class LogoutTest extends AbstractCidaasTestParent {
         $request = $this->mock->getLastRequest();
         assertEquals('POST', $request->getMethod());
         assertEquals('/session/end_session', $request->getUri()->getPath());
-        assertStringContainsString('access_token_hint=' . self::$ACCESS_TOKEN, $request->getUri()->getQuery());
-        assertStringContainsString('post_logout_redirect_uri=' . urlencode(self::$postLogoutUri), $request->getUri()->getQuery());
+        assertEquals('', $request->getUri()->getQuery());
+        assertEquals('application/json', $request->getHeaderLine('Content-Type'));
+        $body = json_decode((string)$request->getBody(), true);
+        assertEquals(self::$ACCESS_TOKEN, $body['access_token_hint']);
+        assertEquals(self::$postLogoutUri, $body['post_logout_redirect_uri']);
     }
 
     public function test_logout_withAccessTokenAndNoPostLogoutUri_serverCalledWithAccessToken() {
@@ -55,8 +59,11 @@ final class LogoutTest extends AbstractCidaasTestParent {
         $request = $this->mock->getLastRequest();
         assertEquals('POST', $request->getMethod());
         assertEquals('/session/end_session', $request->getUri()->getPath());
-        assertStringContainsString('access_token_hint=' . self::$ACCESS_TOKEN, $request->getUri()->getQuery());
-        assertStringNotContainsString('post_logout_redirect_uri', $request->getUri()->getQuery());
+        assertEquals('', $request->getUri()->getQuery());
+        assertEquals('application/json', $request->getHeaderLine('Content-Type'));
+        $body = json_decode((string)$request->getBody(), true);
+        assertEquals(self::$ACCESS_TOKEN, $body['access_token_hint']);
+        assertArrayNotHasKey('post_logout_redirect_uri', $body);
     }
 
     public function test_logout_withAccessTokenAndPostLogoutUri_returnsRedirectResponse() {
