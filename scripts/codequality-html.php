@@ -10,7 +10,12 @@ if ($argc < 2 || !is_readable($argv[1])) {
     exit(2);
 }
 
-$issues = json_decode((string)file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+$contents = file_get_contents($argv[1]);
+if ($contents === false) {
+    fwrite(STDERR, "error: could not read file: " . $argv[1] . "\n");
+    exit(2);
+}
+$issues = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
 if (!is_array($issues)) {
     fwrite(STDERR, "error: expected a JSON array, got " . gettype($issues) . "\n");
     exit(2);

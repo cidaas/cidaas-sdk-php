@@ -97,7 +97,7 @@ final class PkceTokenExchangeTest extends TestCase {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('PKCE code_verifier missing from session');
 
-        $this->createProvider('')->getAccessToken(GrantType::AuthorizationCode, 'code', '', true);
+        $this->createProvider('')->getAccessToken(GrantType::AuthorizationCode, 'code', '', true)->wait();
     }
 
     public function test_getAccessToken_publicClient_omitsClientSecret(): void {
@@ -137,7 +137,7 @@ final class PkceTokenExchangeTest extends TestCase {
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('client secret is required for client_credentials flow');
 
-        $this->createProvider('')->getAccessToken(GrantType::ClientCredentials);
+        $this->createProvider('')->getAccessToken(GrantType::ClientCredentials)->wait();
     }
 
     public function test_validateAccessToken_withoutSecretOrApiToken_throws(): void {
